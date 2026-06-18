@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', system-ui, sans-serif;
+  }
+
+  html {
+    @apply bg-bg-primary text-content-primary;
+  }
+
+  * {
+    @apply border-divider;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-bg-surface;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-bg-elevated rounded-full;
+  }
+}
