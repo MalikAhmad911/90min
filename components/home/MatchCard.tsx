@@ -1,3 +1,5 @@
+'use client'
+
 import Image from 'next/image'
 import { LiveBadge } from './LiveBadge'
 import { getStatusLabel, isLive } from '@/lib/utils'
