@@ -14,6 +14,22 @@ const liveMatch: Match = {
   competition: { id: 2021, name: 'Premier League', code: 'PL', emblem: 'pl.png' },
 }
 
+const scheduledMatch: Match = {
+  ...liveMatch,
+  id: 2,
+  status: 'SCHEDULED',
+  minute: undefined,
+  score: { fullTime: { home: null, away: null }, halfTime: { home: null, away: null } },
+}
+
+const finishedMatch: Match = {
+  ...liveMatch,
+  id: 3,
+  status: 'FINISHED',
+  minute: undefined,
+  score: { fullTime: { home: 2, away: 1 }, halfTime: { home: 1, away: 0 } },
+}
+
 describe('MatchCard', () => {
   it('renders both team names', () => {
     render(<MatchCard match={liveMatch} />)
@@ -30,5 +46,17 @@ describe('MatchCard', () => {
   it('renders LiveBadge for in-play match', () => {
     render(<MatchCard match={liveMatch} />)
     expect(screen.getByText('LIVE')).toBeInTheDocument()
+  })
+
+  it('shows kickoff time for SCHEDULED match', () => {
+    render(<MatchCard match={scheduledMatch} />)
+    // Should NOT show LIVE badge
+    expect(screen.queryByText('LIVE')).not.toBeInTheDocument()
+  })
+
+  it('shows FT for FINISHED match', () => {
+    render(<MatchCard match={finishedMatch} />)
+    expect(screen.getByText('FT')).toBeInTheDocument()
+    expect(screen.queryByText('LIVE')).not.toBeInTheDocument()
   })
 })

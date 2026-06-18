@@ -14,6 +14,7 @@ function TeamCrest({ src, alt }: { src: string; alt: string }) {
         src={src}
         alt={alt}
         fill
+        sizes="24px"
         className="object-contain"
         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
       />
@@ -22,7 +23,6 @@ function TeamCrest({ src, alt }: { src: string; alt: string }) {
 }
 
 function ScoreOrTime({ match }: { match: Match }) {
-  const live = isLive(match.status)
   const { home, away } = match.score.fullTime
 
   if (match.status === 'SCHEDULED' || match.status === 'TIMED') {
@@ -32,6 +32,9 @@ function ScoreOrTime({ match }: { match: Match }) {
       </span>
     )
   }
+
+  const isPaused = match.status === 'PAUSED'
+  const live = isLive(match.status) && !isPaused
 
   return (
     <div className="flex flex-col items-center gap-0.5">
