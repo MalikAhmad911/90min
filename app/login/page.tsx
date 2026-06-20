@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Lock } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -28,8 +26,9 @@ export default function LoginPage() {
       }
       const params = new URLSearchParams(window.location.search)
       const next = params.get('next') || '/admin/streams'
-      router.push(next)
-      router.refresh()
+      // Full navigation (not a soft router.push) so a stale client-router
+      // cache can never resolve the target to a 404.
+      window.location.assign(next)
     } catch {
       setError('Network error')
     } finally {
