@@ -29,3 +29,14 @@ export interface StreamOverrides {
   byMatch: Record<string, FreeStream>
   byCompetition: Record<string, FreeStream>
 }
+
+/**
+ * A standalone Live TV channel that plays directly (not tied to any match).
+ */
+export interface Channel {
+  id: string
+  name: string
+  kind: 'youtube' | 'hls'
+  /** YouTube video/live id (for 'youtube') or full m3u8 URL (for 'hls') */
+  src: string
+}

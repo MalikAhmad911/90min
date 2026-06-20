@@ -9,6 +9,7 @@ import { useMatches } from '@/hooks/useMatches'
 import { groupByLeague, formatDate } from '@/lib/utils'
 import { COMPETITIONS } from '@/lib/tv/broadcasters'
 import { StreamEditor } from './StreamEditor'
+import { ChannelManager } from './ChannelManager'
 import type { StreamOverrides } from '@/lib/tv/types'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -49,6 +50,9 @@ export function AdminStreams({ username }: { username: string }) {
           <LogOut size={14} /> Sign out
         </button>
       </div>
+
+      {/* Live TV channels — standalone, play directly */}
+      <ChannelManager />
 
       {/* Competition-level defaults — always available */}
       <div className="bg-bg-surface border border-divider rounded-lg overflow-hidden mb-4">

@@ -1,10 +1,11 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import type { StreamOverrides } from '@/lib/tv/types'
+import type { StreamOverrides, Channel } from '@/lib/tv/types'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const STREAMS_FILE = path.join(DATA_DIR, 'streams.json')
 const USERS_FILE = path.join(DATA_DIR, 'users.json')
+const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json')
 
 export interface User {
   id: string
@@ -49,4 +50,13 @@ export async function readUsers(): Promise<User[]> {
 
 export async function writeUsers(users: User[]): Promise<void> {
   await writeJson(USERS_FILE, users)
+}
+
+export async function readChannels(): Promise<Channel[]> {
+  const data = await readJson<Channel[]>(CHANNELS_FILE, [])
+  return Array.isArray(data) ? data : []
+}
+
+export async function writeChannels(channels: Channel[]): Promise<void> {
+  await writeJson(CHANNELS_FILE, channels)
 }

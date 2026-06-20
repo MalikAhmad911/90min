@@ -7,6 +7,7 @@ import { DateNav } from '@/components/home/DateNav'
 import { SkeletonMatchCard } from '@/components/home/SkeletonMatchCard'
 import { CountryPicker } from './CountryPicker'
 import { WatchMatchRow } from './WatchMatchRow'
+import { LiveTV } from './LiveTV'
 import { useMatches } from '@/hooks/useMatches'
 import { useCountry } from '@/hooks/useCountry'
 import { useStreamOverrides } from '@/hooks/useStreamOverrides'
@@ -21,6 +22,9 @@ export function WatchFeed() {
 
   return (
     <div>
+      {/* Standalone Live TV channels — play directly, no match required */}
+      <LiveTV />
+
       <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
 
       {/* Header: title + country picker */}
