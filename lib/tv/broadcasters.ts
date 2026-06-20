@@ -10,6 +10,20 @@ export const COUNTRIES: Country[] = [
 
 export const DEFAULT_COUNTRY = COUNTRIES[0]
 
+/** Supported competitions (football-data codes) for the admin defaults UI. */
+export const COMPETITIONS: { code: string; name: string }[] = [
+  { code: 'PL', name: 'Premier League' },
+  { code: 'CL', name: 'UEFA Champions League' },
+  { code: 'EL', name: 'UEFA Europa League' },
+  { code: 'PD', name: 'La Liga' },
+  { code: 'SA', name: 'Serie A' },
+  { code: 'BL1', name: 'Bundesliga' },
+  { code: 'FL1', name: 'Ligue 1' },
+  { code: 'ELC', name: 'Championship' },
+  { code: 'DED', name: 'Eredivisie' },
+  { code: 'PPL', name: 'Primeira Liga' },
+]
+
 /**
  * Curated "where to watch" mapping: competition code -> country code -> broadcasters.
  * Links point to the broadcaster's live/home page (FotMob-style where-to-watch).

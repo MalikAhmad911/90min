@@ -4,8 +4,10 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { useRouter } from 'next/navigation'
 import { LogOut, Tv } from 'lucide-react'
+import { DateNav } from '@/components/home/DateNav'
 import { useMatches } from '@/hooks/useMatches'
 import { groupByLeague, formatDate } from '@/lib/utils'
+import { COMPETITIONS } from '@/lib/tv/broadcasters'
 import { StreamEditor } from './StreamEditor'
 import type { StreamOverrides } from '@/lib/tv/types'
 
@@ -14,7 +16,7 @@ const EMPTY: StreamOverrides = { byMatch: {}, byCompetition: {} }
 
 export function AdminStreams({ username }: { username: string }) {
   const router = useRouter()
-  const [date] = useState(formatDate(new Date()))
+  const [date, setDate] = useState(formatDate(new Date()))
   const { matches, isLoading } = useMatches(date)
   const { data: overrides = EMPTY, mutate } = useSWR<StreamOverrides>('/api/streams', fetcher)
 
@@ -22,8 +24,7 @@ export function AdminStreams({ username }: { username: string }) {
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/login')
-    router.refresh()
+    window.location.assign('/login')
   }
 
   const onSaved = (next: unknown) => mutate(next as StreamOverrides, { revalidate: false })
@@ -43,56 +44,74 @@ export function AdminStreams({ username }: { username: string }) {
         <button
           type="button"
           onClick={logout}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-elevated text-content-secondary text-[13px] hover:text-content-primary"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-elevated text-content-secondary text-[13px] hover:text-content-primary shrink-0"
         >
           <LogOut size={14} /> Sign out
         </button>
       </div>
 
-      {isLoading && <p className="text-sm text-content-muted px-1">Loading today’s matches…</p>}
-      {!isLoading && groups.length === 0 && (
-        <p className="text-sm text-content-muted px-1">No matches today.</p>
-      )}
+      {/* Competition-level defaults — always available */}
+      <div className="bg-bg-surface border border-divider rounded-lg overflow-hidden mb-4">
+        <div className="px-4 py-2.5 border-b border-divider">
+          <span className="text-[13px] font-semibold text-content-primary">Competition defaults</span>
+          <p className="text-[11px] text-content-muted mt-0.5">
+            Applies to every match in that league (unless a match has its own stream below).
+          </p>
+        </div>
+        <div className="divide-y divide-divider">
+          {COMPETITIONS.map((c) => (
+            <div key={c.code} className="px-4 py-2.5">
+              <p className="text-[13px] text-content-primary font-medium">
+                {c.name} <span className="text-content-muted text-[11px]">({c.code})</span>
+              </p>
+              <StreamEditor
+                scope="competition"
+                storeKey={c.code}
+                current={overrides.byCompetition[c.code]}
+                onSaved={onSaved}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <div className="flex flex-col gap-3">
-        {groups.map((group) => {
-          const code = group.matches[0]?.competition.code ?? ''
-          return (
-            <div key={group.competitionId} className="bg-bg-surface border border-divider rounded-lg overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-divider">
-                <span className="text-[13px] font-semibold text-content-primary">{group.competitionName}</span>
-                <div className="mt-1">
-                  <p className="text-[11px] text-content-muted uppercase tracking-wider">
-                    Competition default ({code})
+      {/* Per-match streams — pick a date with matches */}
+      <div className="bg-bg-surface border border-divider rounded-lg overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-divider">
+          <span className="text-[13px] font-semibold text-content-primary">Per-match streams</span>
+        </div>
+        <DateNav selectedDate={date} onDateChange={setDate} />
+
+        {isLoading && <p className="text-sm text-content-muted px-4 py-3">Loading matches…</p>}
+        {!isLoading && groups.length === 0 && (
+          <p className="text-sm text-content-muted px-4 py-3">
+            No matches on this date — use the arrows above to pick another day, or set a competition default.
+          </p>
+        )}
+
+        {groups.map((group) => (
+          <div key={group.competitionId}>
+            <div className="px-4 py-2 bg-bg-elevated/40">
+              <span className="text-[12px] font-semibold text-content-secondary">{group.competitionName}</span>
+            </div>
+            <div className="divide-y divide-divider">
+              {group.matches.map((m) => (
+                <div key={m.id} className="px-4 py-2.5">
+                  <p className="text-[13px] text-content-primary font-medium">
+                    {m.homeTeam.shortName || m.homeTeam.name} <span className="text-content-muted">vs</span>{' '}
+                    {m.awayTeam.shortName || m.awayTeam.name}
                   </p>
                   <StreamEditor
-                    scope="competition"
-                    storeKey={code}
-                    current={overrides.byCompetition[code]}
+                    scope="match"
+                    storeKey={String(m.id)}
+                    current={overrides.byMatch[String(m.id)]}
                     onSaved={onSaved}
                   />
                 </div>
-              </div>
-
-              <div className="divide-y divide-divider">
-                {group.matches.map((m) => (
-                  <div key={m.id} className="px-4 py-2.5">
-                    <p className="text-[13px] text-content-primary font-medium">
-                      {m.homeTeam.shortName || m.homeTeam.name} <span className="text-content-muted">vs</span>{' '}
-                      {m.awayTeam.shortName || m.awayTeam.name}
-                    </p>
-                    <StreamEditor
-                      scope="match"
-                      storeKey={String(m.id)}
-                      current={overrides.byMatch[String(m.id)]}
-                      onSaved={onSaved}
-                    />
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
     </div>
   )
