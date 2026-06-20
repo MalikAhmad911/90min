@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# runtime data (stream overrides, user accounts with password hashes)
+/data
+
 # next.js
 /.next/
 /out/

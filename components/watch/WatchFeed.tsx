@@ -9,11 +9,13 @@ import { CountryPicker } from './CountryPicker'
 import { WatchMatchRow } from './WatchMatchRow'
 import { useMatches } from '@/hooks/useMatches'
 import { useCountry } from '@/hooks/useCountry'
+import { useStreamOverrides } from '@/hooks/useStreamOverrides'
 import { groupByLeague, formatDate } from '@/lib/utils'
 
 export function WatchFeed() {
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()))
   const [country, setCountry] = useCountry()
+  const overrides = useStreamOverrides()
   const { matches, isLoading, error } = useMatches(selectedDate)
   const groups = groupByLeague(matches)
 
@@ -84,7 +86,7 @@ export function WatchFeed() {
               </div>
               <div className="border-t border-divider divide-y divide-divider">
                 {group.matches.map((match) => (
-                  <WatchMatchRow key={match.id} match={match} country={country} />
+                  <WatchMatchRow key={match.id} match={match} country={country} overrides={overrides} />
                 ))}
               </div>
             </div>

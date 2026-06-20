@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { getWatchOptions, COUNTRIES } from '@/lib/tv/broadcasters'
 import { getFreeStream } from '@/lib/tv/free-streams'
 import type { Match } from '@/lib/types'
+import type { StreamOverrides } from '@/lib/tv/types'
 
 const makeMatch = (overrides: Partial<Match> = {}): Match => ({
   id: 1,
@@ -60,5 +61,27 @@ describe('getFreeStream', () => {
 
   it('returns null for a finished match', () => {
     expect(getFreeStream(makeMatch({ status: 'FINISHED' }))).toBeNull()
+  })
+})
+
+describe('getFreeStream with admin overrides', () => {
+  const overrides: StreamOverrides = {
+    byMatch: { '1': { kind: 'youtube', src: 'matchVid', title: 'Match override' } },
+    byCompetition: { PL: { kind: 'hls', src: 'https://x/comp.m3u8', title: 'Comp override' } },
+  }
+
+  it('per-match override wins over everything', () => {
+    const s = getFreeStream(makeMatch({ id: 1, status: 'FINISHED' }), overrides)
+    expect(s?.src).toBe('matchVid')
+  })
+
+  it('falls back to competition override when no match override', () => {
+    const s = getFreeStream(makeMatch({ id: 999, status: 'SCHEDULED' }), overrides)
+    expect(s?.src).toBe('https://x/comp.m3u8')
+  })
+
+  it('returns null when no override and not live', () => {
+    const s = getFreeStream(makeMatch({ id: 999, status: 'SCHEDULED', competition: { id: 1, name: 'X', code: 'ZZZ', emblem: '' } }), overrides)
+    expect(s).toBeNull()
   })
 })

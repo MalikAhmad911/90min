@@ -8,7 +8,7 @@ import { getWatchOptions } from '@/lib/tv/broadcasters'
 import { getFreeStream } from '@/lib/tv/free-streams'
 import { StreamPlayer } from './StreamPlayer'
 import type { Match } from '@/lib/types'
-import type { Country } from '@/lib/tv/types'
+import type { Country, StreamOverrides } from '@/lib/tv/types'
 
 function TeamCrest({ src, teamName }: { src: string; teamName: string }) {
   const [failed, setFailed] = useState(false)
@@ -41,10 +41,18 @@ function CenterDisplay({ match }: { match: Match }) {
   )
 }
 
-export function WatchMatchRow({ match, country }: { match: Match; country: Country }) {
+export function WatchMatchRow({
+  match,
+  country,
+  overrides,
+}: {
+  match: Match
+  country: Country
+  overrides?: StreamOverrides
+}) {
   const [open, setOpen] = useState(false)
   const broadcasters = getWatchOptions(match.competition.code, country.code)
-  const stream = getFreeStream(match)
+  const stream = getFreeStream(match, overrides)
   const live = isLive(match.status)
   const matchTitle = `${match.homeTeam.shortName || match.homeTeam.name} vs ${match.awayTeam.shortName || match.awayTeam.name}`
 

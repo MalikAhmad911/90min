@@ -1,5 +1,5 @@
 import type { Match } from '@/lib/types'
-import type { FreeStream } from './types'
+import type { FreeStream, StreamOverrides } from './types'
 
 /**
  * Stable, public, royalty-free HLS test stream. Used only as a clearly-labeled
@@ -33,8 +33,17 @@ function isLiveMatch(match: Match): boolean {
 /**
  * Resolves a free, legal, embeddable stream for a match, or null when none is
  * available (the UI then shows broadcaster info only).
+ *
+ * Precedence: admin override (per-match, then per-competition) > curated
+ * defaults > demo feed for live matches.
  */
-export function getFreeStream(match: Match): FreeStream | null {
+export function getFreeStream(match: Match, overrides?: StreamOverrides): FreeStream | null {
+  const overrideByMatch = overrides?.byMatch?.[String(match.id)]
+  if (overrideByMatch) return overrideByMatch
+
+  const overrideByCompetition = overrides?.byCompetition?.[match.competition.code]
+  if (overrideByCompetition) return overrideByCompetition
+
   const byMatch = FREE_STREAMS_BY_MATCH[match.id]
   if (byMatch) return byMatch
 
