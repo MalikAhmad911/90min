@@ -25,6 +25,8 @@ export interface Match {
   status: MatchStatus
   utcDate: string
   minute?: number
+  group?: string
+  stage?: string
   homeTeam: Team
   awayTeam: Team
   score: {

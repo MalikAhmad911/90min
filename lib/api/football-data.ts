@@ -10,6 +10,8 @@ interface FDMatch {
   utcDate: string
   status: string
   minute?: number
+  group?: string
+  stage?: string
   homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string }
   awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string }
   score: {
@@ -39,6 +41,8 @@ async function fetchCompetitionMatches(
       utcDate: m.utcDate,
       status: m.status as Match['status'],
       minute: m.minute,
+      group: m.group,
+      stage: m.stage,
       homeTeam: m.homeTeam,
       awayTeam: m.awayTeam,
       score: m.score,

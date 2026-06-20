@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Trophy, Star, MoreHorizontal } from 'lucide-react'
+import { Activity, Trophy, Tv, Star, MoreHorizontal } from 'lucide-react'
 
 const tabs = [
   { href: '/', label: 'Scores', Icon: Activity },
   { href: '/leagues', label: 'Leagues', Icon: Trophy },
+  { href: '/watch', label: 'Watch', Icon: Tv },
   { href: '/following', label: 'Following', Icon: Star },
   { href: '/more', label: 'More', Icon: MoreHorizontal },
 ]
