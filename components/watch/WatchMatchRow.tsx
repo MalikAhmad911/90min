@@ -1,30 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { Play, Tv, ExternalLink } from 'lucide-react'
 import { isLive, formatKickoffTime } from '@/lib/utils'
 import { getWatchOptions } from '@/lib/tv/broadcasters'
 import { getFreeStream } from '@/lib/tv/free-streams'
 import { StreamPlayer } from './StreamPlayer'
+import { TeamCrest } from '@/components/ui/TeamCrest'
 import type { Match } from '@/lib/types'
 import type { Country, StreamOverrides } from '@/lib/tv/types'
-
-function TeamCrest({ src, teamName }: { src: string; teamName: string }) {
-  const [failed, setFailed] = useState(false)
-  if (failed || !src) {
-    return (
-      <span className="w-4 h-4 shrink-0 rounded-full bg-bg-elevated inline-flex items-center justify-center text-[8px] font-black text-content-muted">
-        {teamName.slice(0, 1)}
-      </span>
-    )
-  }
-  return (
-    <span className="relative inline-block w-4 h-4 shrink-0">
-      <Image src={src} alt={teamName} fill sizes="16px" className="object-contain" onError={() => setFailed(true)} />
-    </span>
-  )
-}
 
 function CenterDisplay({ match }: { match: Match }) {
   const live = isLive(match.status) && match.status !== 'PAUSED'
@@ -69,13 +53,13 @@ export function WatchMatchRow({
           <span className="text-[13px] font-medium truncate text-right text-content-primary">
             {match.homeTeam.shortName || match.homeTeam.name}
           </span>
-          <TeamCrest src={match.homeTeam.crest} teamName={match.homeTeam.name} />
+          <TeamCrest src={match.homeTeam.crest} name={match.homeTeam.name} size={16} />
         </div>
         <div className="w-20 shrink-0 flex items-center justify-center">
           <CenterDisplay match={match} />
         </div>
         <div className="flex-1 flex items-center gap-1.5 min-w-0">
-          <TeamCrest src={match.awayTeam.crest} teamName={match.awayTeam.name} />
+          <TeamCrest src={match.awayTeam.crest} name={match.awayTeam.name} size={16} />
           <span className="text-[13px] font-medium truncate text-content-primary">
             {match.awayTeam.shortName || match.awayTeam.name}
           </span>

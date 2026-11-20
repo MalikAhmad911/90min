@@ -1,43 +1,34 @@
 'use client'
 
-import { useState } from 'react'
-import Image from 'next/image'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import { TeamCrest } from '@/components/ui/TeamCrest'
 import { isLive, formatKickoffTime } from '@/lib/utils'
 import type { Match } from '@/lib/types'
 
-function TeamCrest({ src, teamName }: { src: string; teamName: string }) {
-  const [imgSrc, setImgSrc] = useState(src)
-  const [failed, setFailed] = useState(false)
+/**
+ * Flashes once when the scoreline changes between polls - the goal moment is
+ * the one thing a live score app must not let you scroll past. Deliberately
+ * does not fire on first render, or every card would pop on page load.
+ */
+function useScoreFlash(home: number | null, away: number | null): boolean {
+  const previous = useRef<string | null>(null)
+  const [flash, setFlash] = useState(false)
 
-  if (failed) {
-    return (
-      <span className="w-4 h-4 shrink-0 rounded-full bg-bg-elevated inline-flex items-center justify-center text-[8px] font-black text-content-muted">
-        {teamName.slice(0, 1)}
-      </span>
-    )
-  }
+  useEffect(() => {
+    const current = `${home}-${away}`
+    const hadPrevious = previous.current !== null
+    const changed = previous.current !== current
+    previous.current = current
 
-  return (
-    <span className="relative inline-block w-4 h-4 shrink-0">
-      <Image
-        src={imgSrc}
-        alt={teamName}
-        fill
-        sizes="16px"
-        className="object-contain"
-        onError={() => {
-          if (imgSrc === src) {
-            fetch(`/api/team-badge?name=${encodeURIComponent(teamName)}`)
-              .then((r) => r.json())
-              .then(({ badge }) => { if (badge) setImgSrc(badge); else setFailed(true) })
-              .catch(() => setFailed(true))
-          } else {
-            setFailed(true)
-          }
-        }}
-      />
-    </span>
-  )
+    if (!hadPrevious || !changed) return
+
+    setFlash(true)
+    const timer = setTimeout(() => setFlash(false), 450)
+    return () => clearTimeout(timer)
+  }, [home, away])
+
+  return flash
 }
 
 function StatusLabel({ match }: { match: Match }) {
@@ -65,6 +56,7 @@ function CenterDisplay({ match }: { match: Match }) {
   const live = isLive(match.status) && !isPaused
   const isScheduled = match.status === 'SCHEDULED' || match.status === 'TIMED'
   const { home, away } = match.score.fullTime
+  const flash = useScoreFlash(home, away)
 
   if (isScheduled) {
     return (
@@ -77,7 +69,11 @@ function CenterDisplay({ match }: { match: Match }) {
   const scoreColor = live ? 'text-live-red' : 'text-content-primary'
 
   return (
-    <span className={`text-[15px] font-black tabular-nums tracking-tight ${scoreColor}`}>
+    <span
+      className={`text-[15px] font-black tabular-nums tracking-tight ${scoreColor} ${
+        flash ? 'animate-score-pop' : ''
+      }`}
+    >
       {home ?? '-'}&nbsp;-&nbsp;{away ?? '-'}
     </span>
   )
@@ -96,7 +92,10 @@ export function MatchCard({ match }: { match: Match }) {
   const awayDim = winner === 'home'
 
   return (
-    <div className="flex items-center px-4 py-2.5 hover:bg-bg-elevated transition-colors cursor-pointer gap-2">
+    <Link
+      href={`/match/${match.id}`}
+      className="flex items-center px-3 sm:px-4 py-2.5 hover:bg-bg-elevated transition-colors gap-2"
+    >
       {/* Status: FT / HT / live minute — left column */}
       <div className="w-7 shrink-0 flex justify-end">
         <StatusLabel match={match} />
@@ -107,21 +106,21 @@ export function MatchCard({ match }: { match: Match }) {
         <span className={`text-[13px] font-medium truncate text-right ${homeDim ? 'text-content-muted' : 'text-content-primary'}`}>
           {match.homeTeam.shortName || match.homeTeam.name}
         </span>
-        <TeamCrest src={match.homeTeam.crest} teamName={match.homeTeam.name} />
+        <TeamCrest src={match.homeTeam.crest} name={match.homeTeam.name} size={16} />
       </div>
 
       {/* Score / Time — center, fixed width */}
-      <div className="w-24 shrink-0 flex items-center justify-center">
+      <div className="w-[4.5rem] sm:w-24 shrink-0 flex items-center justify-center">
         <CenterDisplay match={match} />
       </div>
 
       {/* Away team: [crest] Name — left-aligned */}
       <div className="flex-1 flex items-center gap-1.5 min-w-0">
-        <TeamCrest src={match.awayTeam.crest} teamName={match.awayTeam.name} />
+        <TeamCrest src={match.awayTeam.crest} name={match.awayTeam.name} size={16} />
         <span className={`text-[13px] font-medium truncate ${awayDim ? 'text-content-muted' : 'text-content-primary'}`}>
           {match.awayTeam.shortName || match.awayTeam.name}
         </span>
       </div>
-    </div>
+    </Link>
   )
 }

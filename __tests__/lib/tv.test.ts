@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest'
 import { getWatchOptions, COUNTRIES } from '@/lib/tv/broadcasters'
 import { getFreeStream } from '@/lib/tv/free-streams'
 import type { Match } from '@/lib/types'
@@ -48,15 +47,23 @@ describe('getFreeStream', () => {
     expect(getFreeStream(makeMatch({ status: 'SCHEDULED' }))).toBeNull()
   })
 
-  it('returns a playable stream for a live match (demo feed)', () => {
-    const stream = getFreeStream(makeMatch({ status: 'IN_PLAY' }))
-    expect(stream).not.toBeNull()
-    expect(stream?.kind).toBe('hls')
-    expect(stream?.src).toMatch(/\.m3u8$/)
+  // The demo feed is off for launch: a live match with no curated stream must
+  // offer nothing, so the UI falls back to broadcaster links instead of
+  // playing an unrelated sample clip.
+  it('returns null for a live match with no curated stream', () => {
+    expect(getFreeStream(makeMatch({ status: 'IN_PLAY' }))).toBeNull()
   })
 
-  it('returns a stream for a paused (half-time) match', () => {
-    expect(getFreeStream(makeMatch({ status: 'PAUSED' }))).not.toBeNull()
+  it('returns null for a paused (half-time) match with no curated stream', () => {
+    expect(getFreeStream(makeMatch({ status: 'PAUSED' }))).toBeNull()
+  })
+
+  it('still plays a live match once an override exists for it', () => {
+    const stream = getFreeStream(makeMatch({ id: 7, status: 'IN_PLAY' }), {
+      byMatch: { '7': { kind: 'hls', src: 'https://x/live.m3u8', title: 'Official' } },
+      byCompetition: {},
+    })
+    expect(stream?.src).toBe('https://x/live.m3u8')
   })
 
   it('returns null for a finished match', () => {

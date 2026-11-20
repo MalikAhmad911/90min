@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { useRouter } from 'next/navigation'
 import { LogOut, Tv } from 'lucide-react'
 import { DateNav } from '@/components/home/DateNav'
 import { useMatches } from '@/hooks/useMatches'
@@ -16,7 +15,6 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 const EMPTY: StreamOverrides = { byMatch: {}, byCompetition: {} }
 
 export function AdminStreams({ username }: { username: string }) {
-  const router = useRouter()
   const [date, setDate] = useState(formatDate(new Date()))
   const { matches, isLoading } = useMatches(date)
   const { data: overrides = EMPTY, mutate } = useSWR<StreamOverrides>('/api/streams', fetcher)

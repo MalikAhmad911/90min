@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { WatchMatchRow } from '@/components/watch/WatchMatchRow'
 import type { Match } from '@/lib/types'
@@ -28,8 +27,24 @@ describe('WatchMatchRow', () => {
     expect(screen.getByText('Sky Sports')).toBeInTheDocument()
   })
 
-  it('shows a Watch button for a live match', () => {
+  // Being live is not on its own a reason to offer playback - there has to be
+  // a stream we are actually allowed to play.
+  it('does not show a Watch button for a live match with no stream', () => {
     render(<WatchMatchRow match={{ ...baseMatch, status: 'IN_PLAY', minute: 30 }} country={GB} />)
+    expect(screen.queryByText('Watch')).not.toBeInTheDocument()
+  })
+
+  it('shows a Watch button once an admin has added a stream for the match', () => {
+    render(
+      <WatchMatchRow
+        match={{ ...baseMatch, status: 'IN_PLAY', minute: 30 }}
+        country={GB}
+        overrides={{
+          byMatch: { '1': { kind: 'youtube', src: 'abc123', title: 'Official stream' } },
+          byCompetition: {},
+        }}
+      />
+    )
     expect(screen.getByText('Watch')).toBeInTheDocument()
   })
 

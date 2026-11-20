@@ -1,98 +1,165 @@
-const WC_GROUPS = [
-  {
-    name: 'Group A (Mexico)',
-    teams: [
-      { pos: 1, name: 'Mexico', pl: 1, gd: '+2', pts: 3 },
-      { pos: 2, name: 'South Korea', pl: 1, gd: '+1', pts: 3 },
-      { pos: 3, name: 'Czechia', pl: 2, gd: '-1', pts: 1 },
-      { pos: 4, name: 'South Africa', pl: 2, gd: '-2', pts: 1 },
-    ],
-  },
-  {
-    name: 'Group D (USA)',
-    teams: [
-      { pos: 1, name: 'USA', pl: 1, gd: '+3', pts: 3 },
-      { pos: 2, name: 'Australia', pl: 1, gd: '+2', pts: 3 },
-      { pos: 3, name: 'Türkiye', pl: 2, gd: '-2', pts: 0 },
-      { pos: 4, name: 'Paraguay', pl: 2, gd: '-3', pts: 0 },
-    ],
-  },
-]
+'use client'
 
-const TOP_TRANSFERS = [
-  { name: 'Jan Paul van Hecke', from: 'Brighton', to: 'Liverpool', fee: '€60M' },
-  { name: 'Victor Muñoz', from: 'Villarreal', to: 'Arsenal', fee: '€40M' },
-  { name: 'Afonso Moreira', from: 'Benfica', to: 'Man City', fee: '€29.5M' },
-]
+import Link from 'next/link'
+import { useState } from 'react'
+import { useStandings, useScorers } from '@/hooks/useMatches'
+import { FREE_COMPETITIONS } from '@/lib/competitions'
+import { Crest } from '@/components/ui/Crest'
+import { TeamCrest } from '@/components/ui/TeamCrest'
 
-const NEWS = [
-  { title: 'USA vs Australia: World Cup Group D Preview', time: '2h ago', source: '90Min' },
-  { title: 'Scotland hope to upset Morocco in opener', time: '3h ago', source: '90Min' },
-  { title: 'Mexico secure dominant opening win over South Korea', time: '1h ago', source: '90Min' },
-]
+/**
+ * Widgets beside the feed.
+ *
+ * Everything here used to be hardcoded sample data - invented World Cup
+ * groups, invented transfer fees, invented headlines. That is fine in a
+ * mock-up and indefensible in something people are meant to trust, so it now
+ * reads the same live endpoints the rest of the app does.
+ */
+
+const PICKER = ['PL', 'PD', 'BL1', 'SA', 'FL1']
+
+function SectionCard({ children }: { children: React.ReactNode }) {
+  return <div className="bg-bg-surface rounded-lg overflow-hidden">{children}</div>
+}
+
+function Rows({ count }: { count: number }) {
+  return (
+    <div className="p-3 flex flex-col gap-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="h-5 bg-bg-elevated rounded animate-pulse" />
+      ))}
+    </div>
+  )
+}
+
+function MiniTable({ code }: { code: string }) {
+  const { standings, isLoading, error } = useStandings(code)
+  const table = standings.find((t) => t.type === 'TOTAL')?.table ?? []
+
+  if (isLoading && table.length === 0) return <Rows count={6} />
+  if (error) {
+    return <p className="px-3 py-4 text-[11px] text-content-muted">Table unavailable right now.</p>
+  }
+  if (table.length === 0) {
+    return <p className="px-3 py-4 text-[11px] text-content-muted">No table for this competition.</p>
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-[1rem_1fr_1.25rem_1.5rem_1.75rem] gap-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-content-muted">
+        <span>#</span>
+        <span>Team</span>
+        <span className="text-center">PL</span>
+        <span className="text-center">GD</span>
+        <span className="text-center">PTS</span>
+      </div>
+      {table.slice(0, 6).map((row) => (
+        <Link
+          key={row.team.id}
+          href={`/team/${row.team.id}`}
+          className="grid grid-cols-[1rem_1fr_1.25rem_1.5rem_1.75rem] gap-1 items-center px-3 py-1.5 hover:bg-bg-elevated transition-colors"
+        >
+          <span className="text-[11px] text-content-muted tabular-nums">{row.position}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <TeamCrest src={row.team.crest} name={row.team.name} size={14} />
+            <span className="text-[12px] text-content-primary font-medium truncate">
+              {row.team.shortName || row.team.name}
+            </span>
+          </span>
+          <span className="text-[11px] text-content-muted text-center tabular-nums">
+            {row.playedGames}
+          </span>
+          <span className="text-[11px] text-content-muted text-center tabular-nums">
+            {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
+          </span>
+          <span className="text-[11px] text-content-primary font-bold text-center tabular-nums">
+            {row.points}
+          </span>
+        </Link>
+      ))}
+    </>
+  )
+}
+
+function TopScorers({ code }: { code: string }) {
+  const { scorers, isLoading, error } = useScorers(code, 5)
+
+  if (isLoading && scorers.length === 0) return <Rows count={4} />
+  if (error || scorers.length === 0) {
+    return <p className="px-3 py-4 text-[11px] text-content-muted">No scorer data available.</p>
+  }
+
+  return (
+    <div className="divide-y divide-divider">
+      {scorers.slice(0, 5).map((s, i) => (
+        <div key={`${s.player.id}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
+          <span className="w-3 text-[11px] text-content-muted tabular-nums">{i + 1}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] text-content-primary font-medium truncate">
+              {s.player.name}
+            </span>
+            <span className="block text-[10px] text-content-muted truncate">
+              {s.team.shortName || s.team.name}
+            </span>
+          </span>
+          <span className="text-[12px] font-bold text-accent-green tabular-nums">{s.goals}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function RightSidebar() {
+  const [code, setCode] = useState('PL')
+  const competition = FREE_COMPETITIONS.find((c) => c.code === code)
+
   return (
     <div className="py-4 flex flex-col gap-4 px-3">
-      {/* World Cup Standings */}
-      <div className="bg-bg-surface rounded-lg overflow-hidden">
+      {/* Competition picker */}
+      <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide" role="tablist" aria-label="Competition">
+        {PICKER.map((c) => {
+          const meta = FREE_COMPETITIONS.find((x) => x.code === c)
+          if (!meta) return null
+          const active = c === code
+          return (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setCode(c)}
+              title={meta.name}
+              className={`shrink-0 p-1.5 rounded-lg transition-colors ${
+                active ? 'bg-bg-elevated ring-1 ring-accent-green/40' : 'hover:bg-bg-elevated'
+              }`}
+            >
+              <Crest src={meta.emblem} name={meta.name} size={18} fallbackText={meta.flag} />
+            </button>
+          )
+        })}
+      </div>
+
+      <SectionCard>
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-divider">
-          <span className="text-[13px] font-bold text-content-primary">FIFA World Cup</span>
-          <span className="text-[11px] text-content-muted">International</span>
+          <span className="text-[13px] font-bold text-content-primary truncate">
+            {competition?.shortName ?? 'Table'}
+          </span>
+          <Link
+            href={`/leagues/${code}`}
+            className="text-[11px] text-accent-green hover:underline shrink-0"
+          >
+            Full table
+          </Link>
         </div>
-        {WC_GROUPS.map((group) => (
-          <div key={group.name} className="border-b border-divider last:border-0">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1 px-3 py-1 text-[10px] text-content-muted font-semibold uppercase tracking-wider">
-              <span>#</span>
-              <span className="w-6 text-center">PL</span>
-              <span className="w-6 text-center">GD</span>
-              <span className="w-6 text-center">PTS</span>
-            </div>
-            {group.teams.map((team) => (
-              <div key={team.name} className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-1 items-center px-3 py-1 hover:bg-bg-elevated transition-colors">
-                <span className="text-[11px] text-content-muted w-4">{team.pos}</span>
-                <span className="text-[12px] text-content-primary font-medium truncate">{team.name}</span>
-                <span className="text-[11px] text-content-muted w-6 text-center tabular-nums">{team.pl}</span>
-                <span className="text-[11px] text-content-muted w-6 text-center tabular-nums">{team.gd}</span>
-                <span className="text-[11px] text-content-primary font-bold w-6 text-center tabular-nums">{team.pts}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+        <MiniTable code={code} />
+      </SectionCard>
 
-      {/* Top Transfers */}
-      <div className="bg-bg-surface rounded-lg overflow-hidden">
-        <div className="px-3 py-2.5 border-b border-divider flex items-center justify-between">
-          <span className="text-[13px] font-bold text-content-primary">Top transfers</span>
-          <span className="text-[11px] text-content-muted">By date</span>
-        </div>
-        {TOP_TRANSFERS.map((t) => (
-          <div key={t.name} className="flex items-center justify-between px-3 py-2.5 hover:bg-bg-elevated transition-colors border-b border-divider last:border-0">
-            <div className="min-w-0">
-              <p className="text-[12px] font-semibold text-content-primary truncate">{t.name}</p>
-              <p className="text-[11px] text-content-muted truncate">{t.from} → {t.to}</p>
-            </div>
-            <span className="text-[12px] font-bold text-accent-green ml-2 shrink-0">{t.fee}</span>
-          </div>
-        ))}
-        <div className="px-3 py-2 text-center">
-          <span className="text-[12px] text-accent-green cursor-pointer hover:underline">Transfer Center</span>
-        </div>
-      </div>
-
-      {/* News */}
-      <div className="bg-bg-surface rounded-lg overflow-hidden">
+      <SectionCard>
         <div className="px-3 py-2.5 border-b border-divider">
-          <span className="text-[13px] font-bold text-content-primary">News</span>
+          <span className="text-[13px] font-bold text-content-primary">Top scorers</span>
         </div>
-        {NEWS.map((n) => (
-          <div key={n.title} className="px-3 py-2.5 hover:bg-bg-elevated transition-colors border-b border-divider last:border-0 cursor-pointer">
-            <p className="text-[12px] font-medium text-content-primary leading-4 mb-1">{n.title}</p>
-            <p className="text-[11px] text-content-muted">{n.source} · {n.time}</p>
-          </div>
-        ))}
-      </div>
+        <TopScorers code={code} />
+      </SectionCard>
     </div>
   )
 }

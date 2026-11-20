@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { Tv } from 'lucide-react'
 import { DateNav } from '@/components/home/DateNav'
 import { SkeletonMatchCard } from '@/components/home/SkeletonMatchCard'
+import { Crest } from '@/components/ui/Crest'
 import { CountryPicker } from './CountryPicker'
 import { WatchMatchRow } from './WatchMatchRow'
 import { LiveTV } from './LiveTV'
@@ -72,20 +72,7 @@ export function WatchFeed() {
           {groups.map((group) => (
             <div key={group.competitionId} className="bg-bg-surface rounded-lg overflow-hidden">
               <div className="flex items-center gap-2.5 px-4 py-2.5">
-                {group.competitionEmblem ? (
-                  <div className="relative w-5 h-5 shrink-0">
-                    <Image
-                      src={group.competitionEmblem}
-                      alt={group.competitionName}
-                      fill
-                      sizes="20px"
-                      className="object-contain"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-5 h-5 shrink-0 rounded-sm bg-bg-elevated" />
-                )}
+                <Crest src={group.competitionEmblem} name={group.competitionName} size={20} />
                 <span className="text-[13px] font-semibold text-content-primary">{group.competitionName}</span>
               </div>
               <div className="border-t border-divider divide-y divide-divider">

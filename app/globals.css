@@ -9,10 +9,17 @@
 
   html {
     @apply bg-bg-primary text-content-primary;
+    /* Stops the layout shifting sideways when a short page follows a long one. */
+    scrollbar-gutter: stable;
   }
 
   * {
     @apply border-divider;
+  }
+
+  /* A visible, consistent focus ring everywhere a keyboard can land. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-green ring-offset-2 ring-offset-bg-primary rounded-sm;
   }
 
   ::-webkit-scrollbar {
@@ -24,5 +31,69 @@
   }
   ::-webkit-scrollbar-thumb {
     @apply bg-bg-elevated rounded-full;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Rows settle in rather than snapping. Staggered by the caller. */
+  .animate-rise {
+    animation: rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Skeletons sweep instead of blinking - reads as loading, not as broken. */
+  .animate-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.bg.elevated') 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      theme('colors.bg.elevated') 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/*
+ * Motion is decoration here - a live pulse, a score pop, rows easing in.
+ * None of it carries meaning on its own, so for anyone who has asked their
+ * system to reduce motion we switch all of it off rather than merely slowing
+ * it down.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

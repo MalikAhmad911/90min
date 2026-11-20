@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MatchCard } from '@/components/home/MatchCard'
 import type { Match } from '@/lib/types'
@@ -37,26 +36,34 @@ describe('MatchCard', () => {
     expect(screen.getByText('Arsenal')).toBeInTheDocument()
   })
 
+  // The card renders both goal counts inside one node ("2 - 1"), so the score
+  // is matched as a whole rather than as two separate elements.
   it('renders score for live match', () => {
     render(<MatchCard match={liveMatch} />)
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText(/2\s*-\s*1/)).toBeInTheDocument()
   })
 
-  it('renders LiveBadge for in-play match', () => {
+  // Live state is shown FotMob-style, as the current minute in the left
+  // column - there is deliberately no "LIVE" badge on the card.
+  it('shows the current minute for an in-play match', () => {
     render(<MatchCard match={liveMatch} />)
-    expect(screen.getByText('LIVE')).toBeInTheDocument()
+    expect(screen.getByText("67'")).toBeInTheDocument()
+  })
+
+  it('shows HT for a match at half time', () => {
+    render(<MatchCard match={{ ...liveMatch, status: 'PAUSED' }} />)
+    expect(screen.getByText('HT')).toBeInTheDocument()
   })
 
   it('shows kickoff time for SCHEDULED match', () => {
     render(<MatchCard match={scheduledMatch} />)
-    // Should NOT show LIVE badge
-    expect(screen.queryByText('LIVE')).not.toBeInTheDocument()
+    expect(screen.getByText(/^\d{1,2}:\d{2}/)).toBeInTheDocument()
+    expect(screen.queryByText("67'")).not.toBeInTheDocument()
   })
 
   it('shows FT for FINISHED match', () => {
     render(<MatchCard match={finishedMatch} />)
     expect(screen.getByText('FT')).toBeInTheDocument()
-    expect(screen.queryByText('LIVE')).not.toBeInTheDocument()
+    expect(screen.queryByText("67'")).not.toBeInTheDocument()
   })
 })

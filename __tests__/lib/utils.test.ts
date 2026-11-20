@@ -1,5 +1,4 @@
-import { describe, it, expect } from 'vitest'
-import { groupByLeague, formatKickoffTime, getStatusLabel } from '@/lib/utils'
+import { groupByLeague, getStatusLabel } from '@/lib/utils'
 import type { Match } from '@/lib/types'
 
 const makeMatch = (overrides: Partial<Match> = {}): Match => ({

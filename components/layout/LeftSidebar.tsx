@@ -1,22 +1,27 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
+import { usePathname } from 'next/navigation'
+import { FREE_COMPETITIONS } from '@/lib/competitions'
+import { Crest } from '@/components/ui/Crest'
 
-const TOP_LEAGUES = [
-  { id: 2000, code: 'WC', name: 'FIFA World Cup', emblem: 'https://crests.football-data.org/wm26.png' },
-  { id: 2021, code: 'PL', name: 'Premier League', emblem: 'https://crests.football-data.org/PL.png' },
-  { id: 2001, code: 'CL', name: 'Champions League', emblem: 'https://crests.football-data.org/CL.png' },
-  { id: 2014, code: 'PD', name: 'LaLiga', emblem: 'https://crests.football-data.org/PD.png' },
-  { id: 2002, code: 'BL1', name: 'Bundesliga', emblem: 'https://crests.football-data.org/BL1.png' },
-  { id: 2018, code: 'EL', name: 'Europa League', emblem: 'https://crests.football-data.org/EL.png' },
-  { id: 2015, code: 'FL1', name: 'Ligue 1', emblem: 'https://crests.football-data.org/FL1.png' },
-  { id: 2019, code: 'SA', name: 'Serie A', emblem: 'https://crests.football-data.org/SA.png' },
-  { id: 2139, code: 'CDR', name: 'Copa del Rey', emblem: 'https://crests.football-data.org/CDR.png' },
-  { id: 2055, code: 'ELC', name: 'FA Cup', emblem: 'https://crests.football-data.org/ELC.png' },
-]
+/**
+ * Sidebar order: the competitions people look for first.
+ *
+ * These are the real football-data codes, so every link resolves to a page
+ * with a table behind it. The previous list mixed up ids and names (it had
+ * the Europa League pointing at the Euros id, and the Championship labelled
+ * "FA Cup"), and linked to competitions the free plan does not serve.
+ */
+const SIDEBAR_ORDER = ['WC', 'PL', 'CL', 'PD', 'BL1', 'SA', 'FL1', 'ELC', 'DED', 'PPL', 'BSA', 'EC']
+
+const TOP_LEAGUES = SIDEBAR_ORDER.map((code) =>
+  FREE_COMPETITIONS.find((c) => c.code === code)
+).filter((c): c is (typeof FREE_COMPETITIONS)[number] => Boolean(c))
 
 export function LeftSidebar() {
+  const pathname = usePathname()
+
   return (
     <div className="py-4">
       <div className="px-4 mb-1">
@@ -26,27 +31,36 @@ export function LeftSidebar() {
       </div>
 
       <nav className="flex flex-col">
-        {TOP_LEAGUES.map(({ id, name, emblem }) => (
-          <Link
-            key={id}
-            href={`/leagues/${id}`}
-            className="flex items-center gap-3 px-4 py-2 hover:bg-bg-elevated transition-colors group"
-          >
-            <div className="relative w-5 h-5 shrink-0">
-              <Image
-                src={emblem}
-                alt={name}
-                fill
-                sizes="20px"
-                className="object-contain"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+        {TOP_LEAGUES.map((competition) => {
+          const href = `/leagues/${competition.code}`
+          const active = pathname === href
+
+          return (
+            <Link
+              key={competition.code}
+              href={href}
+              className={`flex items-center gap-3 px-4 py-2 transition-colors group ${
+                active ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'
+              }`}
+            >
+              <Crest
+                src={competition.emblem}
+                name={competition.name}
+                size={20}
+                fallbackText={competition.flag}
               />
-            </div>
-            <span className="text-[13px] text-content-secondary group-hover:text-content-primary transition-colors truncate">
-              {name}
-            </span>
-          </Link>
-        ))}
+              <span
+                className={`text-[13px] truncate transition-colors ${
+                  active
+                    ? 'text-content-primary font-medium'
+                    : 'text-content-secondary group-hover:text-content-primary'
+                }`}
+              >
+                {competition.shortName}
+              </span>
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="px-4 mt-3">

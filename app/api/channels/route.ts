@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'crypto'
-import { readChannels, writeChannels } from '@/lib/server/store'
+import { readChannels, addChannel, removeChannel } from '@/lib/server/store'
 import { requireAdmin } from '@/lib/server/auth'
 import type { Channel } from '@/lib/tv/types'
 
@@ -36,24 +35,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
-  const channels = await readChannels()
-
   if (body.action === 'add') {
     if (!isValidNewChannel(body.channel)) {
       return NextResponse.json({ error: 'Invalid channel payload' }, { status: 400 })
     }
     const c = body.channel
-    channels.push({ id: randomUUID(), name: c.name.trim(), kind: c.kind, src: c.src.trim() })
+    await addChannel({ name: c.name.trim(), kind: c.kind, src: c.src.trim() })
   } else if (body.action === 'remove') {
     if (!body.id) {
       return NextResponse.json({ error: 'id required' }, { status: 400 })
     }
-    const idx = channels.findIndex((c) => c.id === body.id)
-    if (idx >= 0) channels.splice(idx, 1)
+    await removeChannel(body.id)
   } else {
     return NextResponse.json({ error: 'action must be add or remove' }, { status: 400 })
   }
 
-  await writeChannels(channels)
-  return NextResponse.json({ channels })
+  return NextResponse.json({ channels: await readChannels() })
 }

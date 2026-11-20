@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { ChevronUp } from 'lucide-react'
 import { MatchCard } from './MatchCard'
+import { Crest } from '@/components/ui/Crest'
 import type { GroupedMatches, Match } from '@/lib/types'
 
 function formatGroupLabel(group?: string): string | null {
@@ -43,20 +43,7 @@ export function LeagueGroup({ group }: { group: GroupedMatches }) {
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-bg-elevated transition-colors"
       >
-        {group.competitionEmblem ? (
-          <div className="relative w-5 h-5 shrink-0">
-            <Image
-              src={group.competitionEmblem}
-              alt={group.competitionName}
-              fill
-              sizes="20px"
-              className="object-contain"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-            />
-          </div>
-        ) : (
-          <div className="w-5 h-5 shrink-0 rounded-sm bg-bg-elevated" />
-        )}
+        <Crest src={group.competitionEmblem} name={group.competitionName} size={20} />
         <span className="text-[13px] font-semibold text-content-primary flex-1 text-left">
           {group.competitionName}
         </span>

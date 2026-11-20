@@ -24,13 +24,15 @@ export function BottomNav() {
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
                 active ? 'text-accent-green' : 'text-content-muted hover:text-content-secondary'
               }`}
             >
               <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
               <span>{label}</span>
-              {active && <span className="absolute bottom-0 w-8 h-0.5 bg-accent-green rounded-t-full" />}
+              {active && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-accent-green rounded-t-full" />
+              )}
             </Link>
           )
         })}

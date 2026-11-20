@@ -10,9 +10,17 @@ const DEMO_HLS = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
 
 /**
  * When true, live matches without a curated stream fall back to the DEMO feed
- * so the "Watch" button is always demonstrable. Set to false in production.
+ * above, so the in-app player is demonstrable.
+ *
+ * OFF for launch. With it on, every live match grew a green "Watch" button
+ * that played an unrelated sample clip - which reads as either broken or
+ * dishonest. With it off the Watch page behaves like FotMob's: it tells you
+ * which broadcaster has the match, and only offers to play something when an
+ * admin has added a genuinely free, legal stream for it.
+ *
+ * Flip to true only in local development.
  */
-const ENABLE_DEMO_FEED = true
+const ENABLE_DEMO_FEED = false
 
 /**
  * Curated legal/free streams for specific matches, keyed by football-data match id.

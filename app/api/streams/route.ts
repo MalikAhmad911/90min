@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readStreams, writeStreams } from '@/lib/server/store'
+import { readStreams, setStreamOverride, deleteStreamOverride } from '@/lib/server/store'
 import { requireAdmin } from '@/lib/server/auth'
 import type { FreeStream } from '@/lib/tv/types'
 
@@ -42,15 +42,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid stream payload' }, { status: 400 })
   }
 
-  const overrides = await readStreams()
-  const bucket = scope === 'match' ? overrides.byMatch : overrides.byCompetition
-
+  // One row, by primary key - no read-modify-write of the whole set, so two
+  // admins saving at once can no longer clobber each other.
   if (stream === null) {
-    delete bucket[key]
+    await deleteStreamOverride(scope, key)
   } else {
-    bucket[key] = stream
+    await setStreamOverride(scope, key, stream)
   }
 
-  await writeStreams(overrides)
-  return NextResponse.json(overrides)
+  return NextResponse.json(await readStreams())
 }

@@ -10,6 +10,19 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    // Flat config has no implicit ignores beyond node_modules, so without this
+    // `eslint .` walks the compiled output in .next and reports on generated code.
+    ignores: [
+      ".next/**",
+      "out/**",
+      "build/**",
+      "coverage/**",
+      "next-env.d.ts",
+      // Runtime state: stream overrides, cached API payloads, user records.
+      "data/**",
+    ],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 

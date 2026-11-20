@@ -14,8 +14,19 @@ export function groupByLeague(matches: Match[]): GroupedMatches[] {
   return Array.from(map.values())
 }
 
+/**
+ * Kickoff time in the viewer's own timezone, on a 24-hour clock.
+ *
+ * Football schedules are written as 15:00 / 20:45 the world over, and a score
+ * list is a dense column of numbers - "03:30 AM" is both wider and harder to
+ * scan than "03:30". The date itself still comes from the browser's locale.
+ */
 export function formatKickoffTime(utcDate: string): string {
-  return new Date(utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(utcDate).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 export function getStatusLabel(status: MatchStatus, minute: number | undefined, utcDate: string): string {

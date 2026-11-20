@@ -5,6 +5,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { DateNav } from './DateNav'
 import { LeagueGroup } from './LeagueGroup'
 import { SkeletonMatchCard } from './SkeletonMatchCard'
+import { EmptyDay } from './EmptyDay'
 import { useMatches } from '@/hooks/useMatches'
 import { groupByLeague, formatDate } from '@/lib/utils'
 import type { Match } from '@/lib/types'
@@ -95,19 +96,27 @@ export function HomeFeed() {
 
       {/* Empty */}
       {!isLoading && !error && groups.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-content-muted">
-          <span className="text-3xl mb-3">⚽</span>
-          <p className="text-sm font-medium text-content-secondary">
-            {filter === 'All' ? 'No matches on this date' : `No ${filter.toLowerCase()} matches`}
-          </p>
-        </div>
+        <EmptyDay
+          date={selectedDate}
+          onDateChange={setSelectedDate}
+          // Only blame the filter when the unfiltered day does have football.
+          filterLabel={filter !== 'All' && matches.length > 0 ? filter : undefined}
+        />
       )}
 
       {/* League groups */}
       {!isLoading && !error && groups.length > 0 && (
         <div className="flex flex-col gap-2 mt-2 px-2 pb-3">
-          {groups.map((group) => (
-            <LeagueGroup key={group.competitionId} group={group} />
+          {groups.map((group, i) => (
+            <div
+              key={group.competitionId}
+              className="animate-rise"
+              // Small stagger so the feed assembles instead of appearing at
+              // once. Capped so a 10-league day does not crawl in.
+              style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
+            >
+              <LeagueGroup group={group} />
+            </div>
           ))}
         </div>
       )}
