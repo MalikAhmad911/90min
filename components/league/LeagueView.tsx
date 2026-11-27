@@ -7,13 +7,18 @@ import { useStandings, useScorers } from '@/hooks/useMatches'
 import type { CompetitionMeta } from '@/lib/competitions'
 import { Crest } from '@/components/ui/Crest'
 import { StandingsTable } from './StandingsTable'
+import { FixturesPanel } from './FixturesPanel'
+import { LeadersPanel } from './LeadersPanel'
+import { FollowButton } from '@/components/follow/FollowButton'
 import type { Scorer, StandingsTable as StandingsTableData } from '@/lib/types'
 
-type Tab = 'table' | 'scorers'
+type Tab = 'table' | 'fixtures' | 'scorers' | 'stats'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'table', label: 'Table' },
+  { id: 'fixtures', label: 'Fixtures' },
   { id: 'scorers', label: 'Top scorers' },
+  { id: 'stats', label: 'Stats' },
 ]
 
 function Panel({ children }: { children: React.ReactNode }) {
@@ -113,7 +118,7 @@ function TablePanel({ code, initial }: { code: string; initial?: StandingsTableD
   return (
     <div className="divide-y divide-divider">
       {tables.map((t, i) => (
-        <StandingsTable key={`${t.stage}-${t.group ?? i}`} table={t} showGroup={tables.length > 1} />
+        <StandingsTable key={`${t.stage}-${t.group ?? i}`} table={t} showGroup={tables.length > 1} competitionCode={code} />
       ))}
     </div>
   )
@@ -152,7 +157,7 @@ export function LeagueView({
           size={28}
           fallbackText={competition.flag}
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-[15px] font-bold text-content-primary truncate">
             {competition.name}
           </h1>
@@ -160,10 +165,16 @@ export function LeagueView({
             {competition.flag} {competition.country}
           </p>
         </div>
+        <FollowButton
+          entityType="competition"
+          entityKey={competition.code}
+          name={competition.name}
+          showLabel
+        />
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-divider">
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-divider overflow-x-auto scrollbar-hide">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -181,11 +192,10 @@ export function LeagueView({
       </div>
 
       <Panel>
-        {tab === 'table' ? (
-          <TablePanel code={competition.code} initial={initialStandings} />
-        ) : (
-          <ScorersPanel code={competition.code} initial={initialScorers} />
-        )}
+        {tab === 'table' && <TablePanel code={competition.code} initial={initialStandings} />}
+        {tab === 'fixtures' && <FixturesPanel code={competition.code} />}
+        {tab === 'scorers' && <ScorersPanel code={competition.code} initial={initialScorers} />}
+        {tab === 'stats' && <LeadersPanel code={competition.code} />}
       </Panel>
     </div>
   )

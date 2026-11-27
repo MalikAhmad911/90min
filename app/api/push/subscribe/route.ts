@@ -18,6 +18,9 @@ import { firstIssue, subscribeSchema, unsubscribeSchema } from '@/lib/notify/val
  */
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured()) return jsonError('Notifications are unavailable', 503)

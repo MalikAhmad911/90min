@@ -16,6 +16,9 @@ import { firstIssue, prefsPatchSchema } from '@/lib/notify/validation'
  */
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 const noStore = { 'Cache-Control': 'no-store' }
 

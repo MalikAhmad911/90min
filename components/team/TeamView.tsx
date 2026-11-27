@@ -8,6 +8,8 @@ import { TeamCrest } from '@/components/ui/TeamCrest'
 import { isLive } from '@/lib/utils'
 import { kickoffTime, shortDate, useIsClient } from '@/lib/seo/client-time'
 import type { Match, TeamDetail } from '@/lib/types'
+import { SquadList } from '@/components/team/SquadList'
+import { FollowButton } from '@/components/follow/FollowButton'
 
 type Tab = 'matches' | 'squad'
 
@@ -114,7 +116,6 @@ export function TeamView({
   }
 
   const teamId = Number(id)
-  const squad = team.squad ?? []
 
   // Newest first for results, soonest first for fixtures.
   const now = !isClient && renderedAt !== undefined ? renderedAt : Date.now()
@@ -140,7 +141,7 @@ export function TeamView({
 
         <TeamCrest src={team.crest} name={team.name} size={44} />
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-[15px] font-bold text-content-primary truncate">{team.name}</h1>
           <div className="flex items-center gap-2.5 mt-0.5 flex-wrap">
             {team.venue && (
@@ -156,6 +157,7 @@ export function TeamView({
             )}
           </div>
         </div>
+        <FollowButton entityType="team" entityKey={team.id} name={team.shortName || team.name} showLabel />
       </div>
 
       {/* Tabs */}
@@ -221,34 +223,7 @@ export function TeamView({
 
       {tab === 'squad' && (
         <div className="mt-2 mx-2 mb-3 bg-bg-surface rounded-lg overflow-hidden">
-          {squad.length > 0 ? (
-            <div className="divide-y divide-divider">
-              {squad.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2">
-                  <span className="text-[13px] text-content-primary truncate flex-1">
-                    {p.name}
-                  </span>
-                  {p.position && (
-                    <span className="text-[10px] uppercase tracking-wide text-content-muted shrink-0">
-                      {p.position}
-                    </span>
-                  )}
-                  {p.nationality && (
-                    <span className="text-[11px] text-content-muted shrink-0 truncate max-w-[6rem]">
-                      {p.nationality}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="px-4 py-10 text-center">
-              <p className="text-[13px] text-content-secondary font-medium">Squad unavailable</p>
-              <p className="text-[11px] text-content-muted mt-1">
-                Squad lists are not published for every team on this plan.
-              </p>
-            </div>
-          )}
+          <SquadList teamId={teamId} fallback={team.squad} />
         </div>
       )}
     </div>

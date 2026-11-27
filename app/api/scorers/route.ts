@@ -6,6 +6,9 @@ import { getScorers } from '@/lib/db/queries'
 import { ensureFresh } from '@/lib/server/read-through'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 const DAY = 24 * 60 * 60_000
 

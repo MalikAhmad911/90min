@@ -3,6 +3,9 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { getSquad, squadQuerySchema } from '@/lib/db/player-queries'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 /**
  * A club's squad from the players table: /api/player/squad?team=65.

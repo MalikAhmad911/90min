@@ -3,6 +3,9 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { getPlayerPageData, playerIdSchema } from '@/lib/db/player-queries'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 /** One player's profile, season stats and their club's recent/next matches. */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {

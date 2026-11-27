@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * RTL codemod: rewrites physical Tailwind classes to logical ones so the
  * layout mirrors under <html dir="rtl"> (Urdu) with no `rtl:` duplicates.

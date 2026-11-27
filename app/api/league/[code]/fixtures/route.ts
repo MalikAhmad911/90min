@@ -3,6 +3,9 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { fixturesQuerySchema, getFixturesByRound, leagueCodeSchema } from '@/lib/db/league-queries'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 /** A competition's fixtures for one round: /api/league/PL/fixtures?matchday=12. */
 export async function GET(req: NextRequest, { params }: { params: { code: string } }) {

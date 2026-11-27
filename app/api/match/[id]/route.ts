@@ -7,6 +7,9 @@ import { withMatchEvents, type MatchEventsExtras } from '@/lib/db/event-queries'
 import type { Match } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 const MINUTE = 60_000
 
@@ -37,7 +40,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     // A match in play is worth keeping current; a finished one never changes.
     if (match.status === 'IN_PLAY' || match.status === 'PAUSED') {
-      await ensureFresh({ resources: [{ resource: 'live-window', maxAgeMs: MINUTE }] })
+      const code = match.competition.code
+      // OpenLigaDB carries goal events for these two; it throttles itself.
+      const events =
+        code === 'BL1' || code === 'CL' ? [{ resource: `events:${code}`, maxAgeMs: MINUTE }] : []
+      await ensureFresh({
+        resources: [{ resource: 'live-window', maxAgeMs: MINUTE }, ...events],
+      })
     }
 
     // Goal events are an enrichment: if they cannot be read, the match is

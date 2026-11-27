@@ -17,6 +17,9 @@ import { dispatchPendingSignals } from '@/lib/notify/dispatch'
  */
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
 function authorised(req: NextRequest): boolean {

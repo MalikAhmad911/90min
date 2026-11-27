@@ -3,6 +3,9 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { getLeaders, leaderQueryOrDefault, leagueCodeSchema } from '@/lib/db/league-queries'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 /** Goals and assists leaderboards: /api/league/PL/leaders?limit=10. */
 export async function GET(req: NextRequest, { params }: { params: { code: string } }) {

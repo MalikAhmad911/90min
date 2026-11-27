@@ -1,6 +1,8 @@
 'use client'
 
 import { useT } from '@/lib/i18n/client'
+import { EnableNotifications } from '@/components/notify/EnableNotifications'
+import { NotifyPrefs } from '@/components/notify/NotifyPrefs'
 import { AboutSection } from './AboutSection'
 import { LanguageSetting } from './LanguageSetting'
 import { LiteModeSetting } from './LiteModeSetting'
@@ -35,9 +37,10 @@ export function SettingsView() {
           this SettingsSection wrapper so the card matches its neighbours.
         */}
         <SettingsSection title={t('settings.notifications.title')}>
-          <p data-slot="notifications" className="text-[12px] text-content-muted">
-            {t('settings.notifications.placeholder')}
-          </p>
+          <div data-slot="notifications" className="space-y-3">
+            <EnableNotifications />
+            <NotifyPrefs />
+          </div>
         </SettingsSection>
 
         <AboutSection />

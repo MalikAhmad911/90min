@@ -4,6 +4,9 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { getMatchesByTeam } from '@/lib/db/queries'
 
 export const dynamic = 'force-dynamic'
+// The Neon driver queries over fetch(); without this Next can replay a cached
+// query result here instead of reading the database.
+export const fetchCache = 'force-no-store'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const id = Number(params.id)

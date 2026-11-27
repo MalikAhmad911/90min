@@ -11,6 +11,8 @@ import { TeamCrest } from '@/components/ui/TeamCrest'
 import { MatchEvents } from './MatchEvents'
 import { MatchStats } from './MatchStats'
 import { MatchLineups } from './MatchLineups'
+import { ScorersSummary } from './ScorersSummary'
+import { FollowButton } from '@/components/follow/FollowButton'
 import type { Match, MatchDetail } from '@/lib/types'
 
 type Tab = 'summary' | 'lineups' | 'stats' | 'h2h'
@@ -149,6 +151,12 @@ export function MatchDetailView({
             Matchday {match.matchday}
           </span>
         )}
+        <FollowButton
+          entityType="match"
+          entityKey={match.id}
+          name={`${match.homeTeam.shortName || match.homeTeam.name} vs ${match.awayTeam.shortName || match.awayTeam.name}`}
+          className="ml-auto"
+        />
       </div>
 
       {/* Scoreline */}
@@ -203,6 +211,8 @@ export function MatchDetailView({
             </span>
           </Link>
         </div>
+
+        <ScorersSummary match={match} />
 
         {/* Venue / attendance / referee */}
         {(match.venue || match.attendance || match.referees?.length) && (
