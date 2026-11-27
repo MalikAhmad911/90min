@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { TeamCrest } from '@/components/ui/TeamCrest'
-import { isLive, formatKickoffTime } from '@/lib/utils'
+import { Crest } from '@/components/ui/Crest'
+import { isLive, formatKickoffTimeIn } from '@/lib/utils'
 import type { Match } from '@/lib/types'
 
 /**
@@ -51,7 +52,7 @@ function StatusLabel({ match }: { match: Match }) {
   return null
 }
 
-function CenterDisplay({ match }: { match: Match }) {
+function CenterDisplay({ match, timeZone }: { match: Match; timeZone?: string | null }) {
   const isPaused = match.status === 'PAUSED'
   const live = isLive(match.status) && !isPaused
   const isScheduled = match.status === 'SCHEDULED' || match.status === 'TIMED'
@@ -61,7 +62,7 @@ function CenterDisplay({ match }: { match: Match }) {
   if (isScheduled) {
     return (
       <span className="text-[13px] font-semibold text-content-secondary tabular-nums">
-        {formatKickoffTime(match.utcDate)}
+        {formatKickoffTimeIn(match.utcDate, timeZone)}
       </span>
     )
   }
@@ -79,7 +80,18 @@ function CenterDisplay({ match }: { match: Match }) {
   )
 }
 
-export function MatchCard({ match }: { match: Match }) {
+interface MatchCardProps {
+  match: Match
+  /** Zone for the kickoff time; the browser's own when omitted. */
+  timeZone?: string | null
+  /**
+   * Show the competition's emblem on the row - for lists that mix leagues
+   * (the "By time" view and the Following section).
+   */
+  showCompetition?: boolean
+}
+
+export function MatchCard({ match, timeZone, showCompetition = false }: MatchCardProps) {
   const winner = match.status === 'FINISHED'
     ? match.score.fullTime.home !== null && match.score.fullTime.away !== null
       ? match.score.fullTime.home > match.score.fullTime.away ? 'home'
@@ -111,7 +123,7 @@ export function MatchCard({ match }: { match: Match }) {
 
       {/* Score / Time — center, fixed width */}
       <div className="w-[4.5rem] sm:w-24 shrink-0 flex items-center justify-center">
-        <CenterDisplay match={match} />
+        <CenterDisplay match={match} timeZone={timeZone} />
       </div>
 
       {/* Away team: [crest] Name — left-aligned */}
@@ -121,6 +133,13 @@ export function MatchCard({ match }: { match: Match }) {
           {match.awayTeam.shortName || match.awayTeam.name}
         </span>
       </div>
+
+      {showCompetition && (
+        <span className="w-5 shrink-0 flex justify-end" title={match.competition.name}>
+          <Crest src={match.competition.emblem} name={match.competition.name} size={14} />
+          <span className="sr-only">{match.competition.name}</span>
+        </span>
+      )}
     </Link>
   )
 }

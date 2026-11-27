@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { FREE_COMPETITIONS } from '@/lib/competitions'
 import { Crest } from '@/components/ui/Crest'
+import { TeamCrest } from '@/components/ui/TeamCrest'
+import { useFollowSummary } from '@/hooks/useFollows'
 
 /**
  * Sidebar order: the competitions people look for first.
@@ -21,9 +23,42 @@ const TOP_LEAGUES = SIDEBAR_ORDER.map((code) =>
 
 export function LeftSidebar() {
   const pathname = usePathname()
+  // Only rendered when the device follows teams; nothing shows while loading.
+  const { summary } = useFollowSummary()
+  const followedTeams = summary?.teams ?? []
 
   return (
     <div className="py-4">
+      {followedTeams.length > 0 && (
+        <div className="mb-4">
+          <div className="px-4 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-content-muted">
+              Following
+            </span>
+          </div>
+          <nav aria-label="Followed teams" className="flex flex-col">
+            {followedTeams.map((team) => {
+              const href = `/team/${team.id}`
+              const active = pathname === href
+              return (
+                <Link
+                  key={team.id}
+                  href={href}
+                  className={`flex items-center gap-3 px-4 py-2 transition-colors group ${
+                    active ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'
+                  }`}
+                >
+                  <TeamCrest src={team.crest} name={team.name} size={20} />
+                  <span className="text-[13px] truncate text-content-secondary group-hover:text-content-primary">
+                    {team.shortName}
+                  </span>
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
+      )}
+
       <div className="px-4 mb-1">
         <span className="text-[11px] font-bold uppercase tracking-widest text-content-muted">
           Top leagues

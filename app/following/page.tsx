@@ -1,9 +1,13 @@
+import type { Metadata } from 'next'
+import { FollowingView } from '@/components/follow/FollowingView'
+
+export const metadata: Metadata = {
+  title: 'Following — 90 Min Tactics',
+  description: 'Your teams, leagues and players, with their next matches.',
+  // Follows live on the device; the server-rendered page is an empty shell.
+  robots: { index: false, follow: true },
+}
+
 export default function FollowingPage() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-content-muted">
-      <span className="text-5xl mb-4">⭐</span>
-      <h1 className="text-lg font-bold text-content-primary mb-2">Following</h1>
-      <p className="text-sm">Follow your favorite teams &amp; leagues — coming in M5</p>
-    </div>
-  )
+  return <FollowingView />
 }
