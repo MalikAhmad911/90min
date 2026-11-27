@@ -4,7 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, Users } from 'lucide-react'
 import { useMatchDetail } from '@/hooks/useMatches'
-import { isLive, formatKickoffTime } from '@/lib/utils'
+import { isLive } from '@/lib/utils'
+import { kickoffTime, shortDate, useIsClient } from '@/lib/seo/client-time'
 import { resolveCompetition } from '@/lib/competitions'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { MatchEvents } from './MatchEvents'
@@ -22,6 +23,8 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 function StatusPill({ match }: { match: MatchDetail }) {
+  const local = useIsClient()
+
   if (isLive(match.status)) {
     const label = match.status === 'PAUSED' ? 'HT' : `${match.minute ?? '?'}'`
     return (
@@ -50,17 +53,14 @@ function StatusPill({ match }: { match: MatchDetail }) {
 
   return (
     <span className="px-2.5 py-1 rounded-full bg-bg-elevated text-content-secondary text-[11px] font-semibold">
-      {formatKickoffTime(match.utcDate)}
+      {kickoffTime(match.utcDate, local)}
     </span>
   )
 }
 
 function H2HRow({ match }: { match: Match }) {
-  const date = new Date(match.utcDate).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  const local = useIsClient()
+  const date = shortDate(match.utcDate, local, { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
     <Link
@@ -81,9 +81,17 @@ function H2HRow({ match }: { match: Match }) {
   )
 }
 
-export function MatchDetailView({ id }: { id: string }) {
-  const { match, headToHead, error, isLoading } = useMatchDetail(id)
+export function MatchDetailView({
+  id,
+  initialData,
+}: {
+  id: string
+  /** Server-rendered match and H2H; absent when the database was unavailable. */
+  initialData?: { match: MatchDetail; headToHead: Match[] }
+}) {
+  const { match, headToHead, error, isLoading } = useMatchDetail(id, initialData)
   const [tab, setTab] = useState<Tab>('summary')
+  const local = useIsClient()
 
   if (isLoading && !match) {
     return (
@@ -95,7 +103,9 @@ export function MatchDetailView({ id }: { id: string }) {
     )
   }
 
-  if (error || !match) {
+  // A failed refresh keeps the match already on screen (server-rendered or
+  // polled); the error state is only for when there is nothing to show.
+  if (!match) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <p className="text-sm font-medium text-content-secondary">Could not load this match</p>
@@ -178,7 +188,7 @@ export function MatchDetailView({ id }: { id: string }) {
               </>
             ) : (
               <p className="text-2xl font-black text-content-secondary tabular-nums">
-                {formatKickoffTime(match.utcDate)}
+                {kickoffTime(match.utcDate, local)}
               </p>
             )}
           </div>

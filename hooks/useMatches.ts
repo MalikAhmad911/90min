@@ -5,6 +5,7 @@ import type {
   Match,
   CompetitionStandings,
   Scorer,
+  StandingsTable,
   TeamDetail,
 } from '@/lib/types'
 
@@ -49,12 +50,21 @@ interface MatchDetailResponse {
   error?: string
 }
 
-/** One match, with head-to-head. Only polls while the match is in play. */
-export function useMatchDetail(id: number | string | null) {
+/**
+ * One match, with head-to-head. Only polls while the match is in play.
+ *
+ * `initial` is the server-rendered copy. SWR shows it immediately and still
+ * revalidates on mount (revalidateIfStale), so live polling carries on from it.
+ */
+export function useMatchDetail(
+  id: number | string | null,
+  initial?: { match: MatchDetail; headToHead: Match[] }
+) {
   const { data, error, isLoading } = useSWR<MatchDetailResponse>(
     id ? `/api/match/${id}` : null,
     fetcher,
     {
+      fallbackData: initial,
       refreshInterval: (latest) => {
         const status = latest?.match?.status
         return status === 'IN_PLAY' || status === 'PAUSED' ? 30_000 : 0
@@ -75,11 +85,16 @@ export function useMatchDetail(id: number | string | null) {
 type StandingsResponse = CompetitionStandings & { error?: string }
 
 /** League table. Changes only after matches, so no polling. */
-export function useStandings(competition: string | null) {
+export function useStandings(competition: string | null, initial?: StandingsTable[]) {
   const { data, error, isLoading } = useSWR<StandingsResponse>(
     competition ? `/api/standings?competition=${competition}` : null,
     fetcher,
-    { revalidateOnFocus: false, keepPreviousData: true }
+    {
+      // The server copy carries the tables only; competition and season arrive with the first fetch.
+      fallbackData: initial ? ({ standings: initial } as StandingsResponse) : undefined,
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+    }
   )
 
   return {
@@ -91,11 +106,15 @@ export function useStandings(competition: string | null) {
   }
 }
 
-export function useScorers(competition: string | null, limit = 20) {
+export function useScorers(competition: string | null, limit = 20, initial?: Scorer[]) {
   const { data, error, isLoading } = useSWR<{ scorers: Scorer[]; error?: string }>(
     competition ? `/api/scorers?competition=${competition}&limit=${limit}` : null,
     fetcher,
-    { revalidateOnFocus: false, keepPreviousData: true }
+    {
+      fallbackData: initial ? { scorers: initial } : undefined,
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+    }
   )
 
   return {
@@ -105,12 +124,20 @@ export function useScorers(competition: string | null, limit = 20) {
   }
 }
 
-export function useTeam(id: number | string | null) {
+/**
+ * A team and its matches. `initial` comes from the database at render time and
+ * has no squad; the mount-time fetch through the API fills that in.
+ */
+export function useTeam(
+  id: number | string | null,
+  initial?: { team: TeamDetail; matches: Match[] }
+) {
   const { data, error, isLoading } = useSWR<{
     team: TeamDetail
     matches: Match[]
     error?: string
   }>(id ? `/api/team/${id}` : null, fetcher, {
+    fallbackData: initial,
     revalidateOnFocus: false,
     keepPreviousData: true,
   })
