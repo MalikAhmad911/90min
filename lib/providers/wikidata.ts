@@ -1,7 +1,9 @@
 import { z } from 'zod'
 
 /**
- * Wikidata lookups for player enrichment (height, Q-id).
+ * Wikidata lookups. Player enrichment (height, Q-id) lives here; career
+ * history and transfers (lib/transfers/*) reuse sparqlSelect() below, so
+ * every query to WDQS goes out through one function with one User-Agent.
  *
  * Wikidata's statements are CC0, so a height taken from here needs no
  * attribution. Its images (P18) are a different matter - every Commons file
@@ -76,11 +78,11 @@ export function matchCandidate(
 }
 
 /** A SPARQL string literal. Backslash and quote are the only characters that need escaping. */
-function literal(value: string): string {
+export function literal(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ')}"`
 }
 
-const QID = /^Q\d+$/
+export const QID = /^Q\d+$/
 
 const bindingSchema = z.object({
   item: z.object({ value: z.string() }),
@@ -93,7 +95,26 @@ const responseSchema = z.object({
   results: z.object({ bindings: z.array(z.unknown()) }),
 })
 
-async function runQuery(query: string): Promise<WikidataCandidate[]> {
+export interface SparqlOptions {
+  /**
+   * Seconds to keep the response in Next's Data Cache. Omitted: never cached
+   * (the enrichment job wants fresh answers). Only 200 responses are cached,
+   * so a failure is retried on the next render rather than remembered.
+   */
+  revalidate?: number
+  /** Client-side timeout. WDQS itself gives up at 60 s. */
+  timeoutMs?: number
+}
+
+/**
+ * Runs one SELECT against the Wikidata Query Service and returns the raw
+ * bindings. The single HTTP path to WDQS in this app: every query identifies
+ * itself with USER_AGENT and has a timeout.
+ *
+ * The body is sent as a string so Next's fetch cache can key on it.
+ */
+export async function sparqlSelect(query: string, options: SparqlOptions = {}): Promise<unknown[]> {
+  const { revalidate, timeoutMs = 30_000 } = options
   const res = await fetch(ENDPOINT, {
     method: 'POST',
     headers: {
@@ -101,19 +122,27 @@ async function runQuery(query: string): Promise<WikidataCandidate[]> {
       Accept: 'application/sparql-results+json',
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({ query }),
-    cache: 'no-store',
-    signal: AbortSignal.timeout(30_000),
+    body: new URLSearchParams({ query }).toString(),
+    ...(revalidate ? { next: { revalidate } } : { cache: 'no-store' as const }),
+    signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) throw new Error(`Wikidata responded ${res.status}`)
+  return responseSchema.parse(await res.json()).results.bindings
+}
 
-  const parsed = responseSchema.parse(await res.json())
+/** 'http://www.wikidata.org/entity/Q42' -> 'Q42'; anything else -> null. */
+export function qidFromUri(uri: string): string | null {
+  const qid = uri.slice(uri.lastIndexOf('/') + 1)
+  return QID.test(qid) ? qid : null
+}
+
+async function runQuery(query: string): Promise<WikidataCandidate[]> {
   const out: WikidataCandidate[] = []
-  for (const raw of parsed.results.bindings) {
+  for (const raw of await sparqlSelect(query)) {
     const b = bindingSchema.safeParse(raw)
     if (!b.success) continue
-    const qid = b.data.item.value.split('/').pop() ?? ''
-    if (!QID.test(qid)) continue
+    const qid = qidFromUri(b.data.item.value)
+    if (!qid) continue
     out.push({
       qid,
       label: b.data.label.value,
