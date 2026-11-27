@@ -505,19 +505,42 @@ export function syncScorers(code: string): Promise<SyncResult> {
  * sync run picks a small number of the stalest things rather than trying to
  * refresh everything at once.
  */
+/**
+ * After repeated failures a resource waits before it is tried again: one
+ * minute after the first failure, doubling up to six hours. Without this a
+ * resource that can never succeed (a tournament between editions has no
+ * table, so the provider answers 404) has an infinite age, sorts first on
+ * every run, and takes a slot from data that would actually refresh.
+ */
+export function isBackingOff(
+  failures: number,
+  lastAttemptAt: Date | string | null,
+  now: number
+): boolean {
+  if (failures <= 0 || !lastAttemptAt) return false
+  const waitMs = Math.min(6 * 60 * 60_000, 60_000 * 2 ** Math.min(failures - 1, 20))
+  return now - new Date(lastAttemptAt).getTime() < waitMs
+}
+
 export async function staleResources(limit = 4): Promise<string[]> {
   const db = getDb()
   const rows = await db
-    .select({ resource: syncState.resource, lastSuccessAt: syncState.lastSuccessAt })
+    .select({
+      resource: syncState.resource,
+      lastSuccessAt: syncState.lastSuccessAt,
+      lastAttemptAt: syncState.lastAttemptAt,
+      failures: syncState.consecutiveFailures,
+    })
     .from(syncState)
 
-  const seen = new Map(rows.map((r) => [r.resource, r.lastSuccessAt]))
+  const seen = new Map(rows.map((r) => [r.resource, r]))
   const now = Date.now()
   const candidates: { resource: string; age: number }[] = []
 
   const add = (resource: string, maxAgeMs: number) => {
-    const last = seen.get(resource)
-    const age = last ? now - new Date(last).getTime() : Infinity
+    const row = seen.get(resource)
+    if (row && isBackingOff(row.failures, row.lastAttemptAt, now)) return
+    const age = row?.lastSuccessAt ? now - new Date(row.lastSuccessAt).getTime() : Infinity
     if (age > maxAgeMs) candidates.push({ resource, age })
   }
 
