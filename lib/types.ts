@@ -44,6 +44,8 @@ export interface Match {
   venue?: string | null
   /** Main referee's name. */
   referee?: string | null
+  /** Red cards per side, when a details provider reported any (PRD MAT-4). */
+  redCards?: { home: number; away: number }
   season?: {
     id: number
     startDate?: string | null
@@ -241,4 +243,91 @@ export interface TeamDetail extends Team {
     nationality: string | null
   }[]
   runningCompetitions?: CompetitionInfo[]
+}
+
+/* ------------------------------------------------------------------ *
+ * Match details from an enrichment provider (Highlightly).
+ * Normalised on ingest, so the client never sees a provider's raw shape.
+ * ------------------------------------------------------------------ */
+
+export type TimelineEventType =
+  | 'GOAL'
+  | 'OWN_GOAL'
+  | 'PENALTY_GOAL'
+  | 'MISSED_PENALTY'
+  | 'YELLOW_CARD'
+  | 'SECOND_YELLOW'
+  | 'RED_CARD'
+  | 'SUBSTITUTION'
+  | 'VAR'
+
+/** One timeline entry, oriented to OUR home/away. */
+export interface MatchTimelineEvent {
+  type: TimelineEventType
+  minute: number | null
+  addedTime: number | null
+  side: 'home' | 'away' | null
+  /** Scorer, booked player, or the player coming ON for a substitution. */
+  player: string | null
+  /** Assist for a goal, or the player going OFF for a substitution. */
+  related: string | null
+  /** e.g. the VAR decision text. */
+  detail: string | null
+  cancelled: boolean
+}
+
+export interface LineupEntry {
+  name: string
+  number: number | null
+  /** Goalkeeper / Defender / Midfielder / Forward, as the provider says. */
+  position: string | null
+}
+
+export interface TeamLineupData {
+  formation: string | null
+  /** Rows from goalkeeper to attack, as the formation draws them. */
+  rows: LineupEntry[][]
+  bench: LineupEntry[]
+}
+
+export interface MatchLineupsData {
+  home: TeamLineupData
+  away: TeamLineupData
+}
+
+/** Keys of the normalised statistics, in display order. */
+export type MatchStatKey =
+  | 'possession'
+  | 'xg'
+  | 'shots'
+  | 'shots_on_target'
+  | 'shots_off_target'
+  | 'blocked_shots'
+  | 'big_chances'
+  | 'corners'
+  | 'fouls'
+  | 'offsides'
+  | 'yellow_cards'
+  | 'red_cards'
+  | 'saves'
+  | 'passes'
+  | 'pass_accuracy'
+  | 'xa'
+
+export interface MatchStatLine {
+  key: MatchStatKey
+  label: string
+  home: number
+  away: number
+  /** percent: 0-100 integer; decimal: two places (xG); count: integer. */
+  format: 'percent' | 'decimal' | 'count'
+}
+
+/** Present on a match payload when a details provider covers it. */
+export interface MatchDetailsExtras {
+  events?: MatchTimelineEvent[]
+  lineups?: MatchLineupsData | null
+  statistics?: MatchStatLine[] | null
+  /** Attribution: which provider the events/lineups/stats came from. */
+  detailsSource?: 'highlightly' | null
 }

@@ -1,6 +1,10 @@
 import { z } from 'zod'
-import { sql } from 'drizzle-orm'
-import { getDb } from '@/lib/db'
+import {
+  claimSlot,
+  releaseSlot,
+  slotDecision as genericSlotDecision,
+  type SlotState,
+} from '@/lib/server/sync/sync-state'
 
 /**
  * OpenLigaDB client (https://www.openligadb.de).
@@ -241,10 +245,7 @@ export const MIN_INTERVAL_MS = 60_000
 /** Backoff ceiling after repeated failures. */
 export const MAX_BACKOFF_MS = 60 * 60_000
 
-export interface SlotState {
-  lastAttemptAt: Date | null
-  consecutiveFailures: number
-}
+export type { SlotState }
 
 /**
  * Whether a pass may talk to OpenLigaDB now. Each consecutive failure (429,
@@ -256,69 +257,23 @@ export function slotDecision(
   now: number,
   minIntervalMs = MIN_INTERVAL_MS
 ): { allowed: boolean; waitMs: number } {
-  if (!state?.lastAttemptAt) return { allowed: true, waitMs: 0 }
-  const failures = Math.max(0, Math.min(state.consecutiveFailures, 16))
-  const interval = Math.min(minIntervalMs * 2 ** failures, MAX_BACKOFF_MS)
-  const elapsed = now - state.lastAttemptAt.getTime()
-  return elapsed >= interval ? { allowed: true, waitMs: 0 } : { allowed: false, waitMs: interval - elapsed }
+  return genericSlotDecision(state, now, minIntervalMs, MAX_BACKOFF_MS)
 }
 
 export function slotResource(league: OpenLigaDbLeague): string {
   return `openligadb:${league}`
 }
 
-type Row = Record<string, unknown>
-function rowsOf(result: unknown): Row[] {
-  return ((result as { rows?: Row[] }).rows ?? (result as Row[])) as Row[]
-}
-
 /**
- * Claims the league's request slot for this pass.
- *
- * Compare-and-set on `sync_state.last_attempt_at`: read the row, decide in JS
- * (so `slotDecision` is the single, tested rule), then update only if nobody
- * else moved the timestamp meanwhile. Two instances racing therefore cannot
- * both win. The timestamp is written from JS at millisecond precision so the
- * comparison round-trips exactly.
+ * Claims the league's request slot for this pass: a compare-and-set on the
+ * league's sync_state row, so two racing instances cannot both win (see
+ * claimSlot).
  */
 export async function claimLeagueSlot(
   league: OpenLigaDbLeague,
   now = new Date()
 ): Promise<{ claimed: boolean; waitMs: number }> {
-  const db = getDb()
-  const resource = slotResource(league)
-  const current = rowsOf(
-    await db.execute(sql`
-      select last_attempt_at as "lastAttemptAt", consecutive_failures as "consecutiveFailures"
-      from sync_state where resource = ${resource}`)
-  )[0]
-
-  const state: SlotState | null = current
-    ? {
-        lastAttemptAt: current.lastAttemptAt ? new Date(current.lastAttemptAt as string) : null,
-        consecutiveFailures: Number(current.consecutiveFailures ?? 0),
-      }
-    : null
-
-  const decision = slotDecision(state, now.getTime())
-  if (!decision.allowed) return { claimed: false, waitMs: decision.waitMs }
-
-  const stamp = now.toISOString()
-  const won = current
-    ? rowsOf(
-        await db.execute(sql`
-          update sync_state set last_attempt_at = ${stamp}::timestamptz
-          where resource = ${resource}
-            and last_attempt_at is not distinct from ${state?.lastAttemptAt?.toISOString() ?? null}::timestamptz
-          returning resource`)
-      )
-    : rowsOf(
-        await db.execute(sql`
-          insert into sync_state (resource, last_attempt_at) values (${resource}, ${stamp}::timestamptz)
-          on conflict (resource) do nothing
-          returning resource`)
-      )
-  return won.length > 0 ? { claimed: true, waitMs: 0 } : { claimed: false, waitMs: MIN_INTERVAL_MS }
+  return claimSlot(slotResource(league), now, MIN_INTERVAL_MS, MAX_BACKOFF_MS)
 }
 
 /** Records how the pass that held the slot went; failures widen the next interval. */
@@ -326,19 +281,7 @@ export async function releaseLeagueSlot(
   league: OpenLigaDbLeague,
   outcome: { ok: true } | { ok: false; error: string }
 ): Promise<void> {
-  const db = getDb()
-  const resource = slotResource(league)
-  if (outcome.ok) {
-    await db.execute(sql`
-      update sync_state
-      set last_success_at = now(), consecutive_failures = 0, last_error = null
-      where resource = ${resource}`)
-  } else {
-    await db.execute(sql`
-      update sync_state
-      set consecutive_failures = consecutive_failures + 1, last_error = ${outcome.error.slice(0, 500)}
-      where resource = ${resource}`)
-  }
+  return releaseSlot(slotResource(league), outcome)
 }
 
 /* ------------------------------------------------------------------ *
