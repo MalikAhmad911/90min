@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState } from 'react'
+import { useLiteMode } from '@/hooks/useLiteMode'
 
 /**
  * The single crest/emblem renderer for the whole app.
@@ -13,6 +14,13 @@ import { useState } from 'react'
  *
  * Previously each of MatchCard, WatchMatchRow, StandingsTable, TeamView and
  * MatchDetailView carried its own near-identical copy of this logic.
+ *
+ * Lite mode (hooks/useLiteMode.ts) shows the same fallback without requesting
+ * the image at all. Lite mode is a browser-only preference, so the server
+ * render and the hydration pass draw the image as usual and the switch to
+ * the fallback happens on the render right after - no hydration mismatch.
+ * TeamCrest goes through here too, so in Lite mode it never reaches its
+ * TheSportsDB lookup either (that only runs when an image fails to load).
  */
 interface CrestProps {
   src?: string | null
@@ -51,7 +59,8 @@ export function Crest({
   // Tracked per-URL, not as a boolean: when a caller swaps in a different src
   // after a failure, that new image must get its own chance to load.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const showFallback = !src || failedSrc === src
+  const { enabled: lite } = useLiteMode()
+  const showFallback = lite || !src || failedSrc === src
 
   if (showFallback) {
     const label = fallbackText ?? initialsOf(name)

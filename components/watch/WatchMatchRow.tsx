@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Play, Tv, ExternalLink } from 'lucide-react'
-import { isLive, formatKickoffTime } from '@/lib/utils'
+import { isLive } from '@/lib/utils'
+import { useKickoffTime } from '@/hooks/useKickoffTime'
 import { getWatchOptions } from '@/lib/tv/broadcasters'
 import { getFreeStream } from '@/lib/tv/free-streams'
 import { StreamPlayer } from './StreamPlayer'
@@ -14,9 +15,10 @@ function CenterDisplay({ match }: { match: Match }) {
   const live = isLive(match.status) && match.status !== 'PAUSED'
   const isScheduled = match.status === 'SCHEDULED' || match.status === 'TIMED'
   const { home, away } = match.score.fullTime
+  const kickoff = useKickoffTime()
 
   if (isScheduled) {
-    return <span className="text-[13px] font-semibold text-content-secondary tabular-nums">{formatKickoffTime(match.utcDate)}</span>
+    return <span className="text-[13px] font-semibold text-content-secondary tabular-nums">{kickoff.time(match.utcDate)}</span>
   }
   return (
     <span className={`text-[15px] font-black tabular-nums tracking-tight ${live ? 'text-live-red' : 'text-content-primary'}`}>

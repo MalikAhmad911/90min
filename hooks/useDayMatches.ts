@@ -9,6 +9,7 @@ import {
   setPreferredTimeZone,
 } from '@/lib/timezone'
 import type { MatchesApiResponse } from '@/lib/types'
+import { litePollInterval, useLiteMode } from './useLiteMode'
 
 /**
  * The user's time zone, or null until mounted.
@@ -63,11 +64,12 @@ const fetcher = async (url: string) => {
  * useMatches: fast only while something is live. Pass nulls to wait.
  */
 export function useDayMatches(date: string | null, tz: string | null) {
+  const { enabled: lite } = useLiteMode()
   const key = date && tz ? `/api/matches?date=${date}&tz=${encodeURIComponent(tz)}` : null
   const { data, error, isLoading, mutate } = useSWR<MatchesApiResponse>(key, fetcher, {
     refreshInterval: (latest) => {
       const live = latest?.matches?.some((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED')
-      return live ? 30_000 : 120_000
+      return litePollInterval(live ? 30_000 : 120_000, lite)
     },
     revalidateOnFocus: true,
     dedupingInterval: 10_000,

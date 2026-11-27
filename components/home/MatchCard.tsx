@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { Crest } from '@/components/ui/Crest'
-import { isLive, formatKickoffTimeIn } from '@/lib/utils'
+import { isLive } from '@/lib/utils'
+import { useKickoffTime } from '@/hooks/useKickoffTime'
 import type { Match } from '@/lib/types'
 
 /**
@@ -58,11 +59,12 @@ function CenterDisplay({ match, timeZone }: { match: Match; timeZone?: string | 
   const isScheduled = match.status === 'SCHEDULED' || match.status === 'TIMED'
   const { home, away } = match.score.fullTime
   const flash = useScoreFlash(home, away)
+  const kickoff = useKickoffTime(timeZone)
 
   if (isScheduled) {
     return (
       <span className="text-[13px] font-semibold text-content-secondary tabular-nums">
-        {formatKickoffTimeIn(match.utcDate, timeZone)}
+        {kickoff.time(match.utcDate)}
       </span>
     )
   }
@@ -82,7 +84,7 @@ function CenterDisplay({ match, timeZone }: { match: Match; timeZone?: string | 
 
 interface MatchCardProps {
   match: Match
-  /** Zone for the kickoff time; the browser's own when omitted. */
+  /** Zone for the kickoff time; the Settings choice (else the browser's) when omitted. */
   timeZone?: string | null
   /**
    * Show the competition's emblem on the row - for lists that mix leagues

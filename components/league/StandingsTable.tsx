@@ -25,25 +25,58 @@ const TONE_CLASSES: Record<ZoneTone, { bar: string; text: string }> = {
   eliminated: { bar: 'bg-content-muted', text: 'text-content-muted' },
 }
 
-const GRID =
-  'grid grid-cols-[2rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_2rem_2rem] sm:grid-cols-[2rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_2rem_2rem_5rem] items-center gap-1'
+/**
+ * Column layouts. Hidden cells (display: none) take no grid track, so each
+ * breakpoint lists exactly the columns it shows:
+ *   base:   #  Team  P  GD  Pts
+ *   400px+: #  Team  P  GD  Pts  Form   (5 pills need ~5rem; at 360px the
+ *                                        team name would be squeezed to nothing)
+ *   sm+:    #  Team  P  W  D  L  GD  Pts  [Form]
+ */
+const GRID_BASE = 'grid items-center gap-1'
+const COLS_NO_FORM =
+  'grid-cols-[2rem_1fr_1.5rem_2rem_2rem] sm:grid-cols-[2rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_2rem_2rem]'
+const COLS_FORM =
+  'grid-cols-[2rem_1fr_1.5rem_2rem_2rem] min-[400px]:grid-cols-[2rem_1fr_1.5rem_2rem_2rem_5rem] sm:grid-cols-[2rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_2rem_2rem_5rem]'
+const FORM_CELL = 'hidden min-[400px]:block'
 
-/** Last five results, newest first, as coloured pips. */
+const FORM_WORD: Record<string, string> = { W: 'win', D: 'draw', L: 'loss' }
+
+/**
+ * Last five results as coloured pills, oldest to newest - the most recent is
+ * on the right. Each pill carries its letter too, so the result never
+ * depends on colour alone.
+ */
 function Form({ form }: { form: string | null }) {
-  if (!form) return <span className="text-content-muted text-[11px]">-</span>
+  if (!form) return <span className="block text-right text-content-muted text-[11px]">-</span>
 
-  const results = form.split(',').slice(0, 5)
+  const results = form
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .slice(-5)
   const colour = (r: string) =>
-    r === 'W' ? 'bg-accent-green text-bg-primary' : r === 'L' ? 'bg-live-red text-white' : 'bg-bg-elevated text-content-secondary'
+    r === 'W'
+      ? 'bg-accent-green text-bg-primary'
+      : r === 'L'
+        ? 'bg-live-red text-white'
+        : 'bg-content-muted text-content-primary'
 
   return (
-    <span className="flex items-center gap-0.5 justify-end">
+    <span
+      className="flex items-center gap-0.5 justify-end"
+      title={`Last ${results.length}, most recent last`}
+    >
+      <span className="sr-only">
+        Form, oldest to newest: {results.map((r) => FORM_WORD[r] ?? r).join(', ')}
+      </span>
       {results.map((r, i) => (
         <span
           key={i}
-          className={`w-3.5 h-3.5 rounded-sm inline-flex items-center justify-center text-[8px] font-black ${colour(r.trim())}`}
+          aria-hidden="true"
+          className={`w-3.5 h-3.5 rounded-sm inline-flex items-center justify-center text-[8px] font-black ${colour(r)}`}
         >
-          {r.trim()}
+          {r}
         </span>
       ))}
     </span>
@@ -54,10 +87,12 @@ function Row({
   row,
   showForm,
   zone,
+  grid,
 }: {
   row: StandingRow
   showForm: boolean
   zone: ZoneRule | null
+  grid: string
 }) {
   const name = row.team.shortName || row.team.name
   return (
@@ -67,7 +102,7 @@ function Row({
       // well as shown.
       aria-label={zone ? `${row.position}. ${name}, ${row.points} points, ${zone.label}` : undefined}
       title={zone?.label}
-      className={`relative ${GRID} px-3 py-2 hover:bg-bg-elevated transition-colors`}
+      className={`relative ${grid} px-3 py-2 hover:bg-bg-elevated transition-colors`}
     >
       {zone && (
         <span
@@ -106,7 +141,7 @@ function Row({
         {row.points}
       </span>
       {showForm && (
-        <span className="hidden sm:block">
+        <span className={FORM_CELL}>
           <Form form={row.form} />
         </span>
       )}
@@ -148,7 +183,10 @@ function ZoneLegend({ zones }: { zones: ZoneRule[] }) {
  *
  * `competitionCode` switches on qualification / relegation zones (PRD LG-2),
  * configured in lib/league-zones.ts. Zones apply to overall tables only: a
- * home-only or away-only table qualifies nobody.
+ * home-only or away-only table (type HOME / AWAY) qualifies nobody.
+ *
+ * The Form column appears when any row has a form string - the provider's,
+ * or the one /api/standings computes from our results (lib/standings-splits.ts).
  */
 export function StandingsTable({
   table,
@@ -163,6 +201,7 @@ export function StandingsTable({
   if (rows.length === 0) return null
 
   const showForm = rows.some((r) => r.form)
+  const grid = `${GRID_BASE} ${showForm ? COLS_FORM : COLS_NO_FORM}`
   const zoned = competitionCode && (!table.type || table.type === 'TOTAL') ? competitionCode : null
   const size = rows.length
   const legend = zonesInTable(zoned, size)
@@ -178,7 +217,7 @@ export function StandingsTable({
       )}
 
       {/* Header */}
-      <div className={`${GRID} px-3 py-1.5 border-b border-divider`}>
+      <div className={`${grid} px-3 py-1.5 border-b border-divider`}>
         <span className="text-[10px] font-bold uppercase text-content-muted">#</span>
         <span className="text-[10px] font-bold uppercase tracking-wider text-content-muted">
           Team
@@ -196,7 +235,7 @@ export function StandingsTable({
         <span className="text-[10px] font-bold uppercase text-content-muted text-center">GD</span>
         <span className="text-[10px] font-bold uppercase text-content-muted text-center">PTS</span>
         {showForm && (
-          <span className="text-[10px] font-bold uppercase text-content-muted text-right hidden sm:block">
+          <span className={`text-[10px] font-bold uppercase text-content-muted text-right ${FORM_CELL}`}>
             Form
           </span>
         )}
@@ -209,6 +248,7 @@ export function StandingsTable({
             row={row}
             showForm={showForm}
             zone={zoneFor(zoned, row.position, size)}
+            grid={grid}
           />
         ))}
       </div>

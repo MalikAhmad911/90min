@@ -1,4 +1,6 @@
 import useSWR from 'swr'
+import { litePollInterval, useLiteMode } from './useLiteMode'
+import type { StandingsView } from '@/lib/standings-splits'
 import type {
   MatchesApiResponse,
   MatchDetail,
@@ -18,6 +20,7 @@ const fetcher = async (url: string) => {
 
 /** Matches for one date. Polls fast only while something is actually live. */
 export function useMatches(date: string) {
+  const { enabled: lite } = useLiteMode()
   const { data, error, isLoading } = useSWR<MatchesApiResponse>(
     `/api/matches?date=${date}`,
     fetcher,
@@ -27,7 +30,7 @@ export function useMatches(date: string) {
           (m) => m.status === 'IN_PLAY' || m.status === 'PAUSED'
         )
         // No point polling a finished day every 30 seconds.
-        return live ? 30_000 : 120_000
+        return litePollInterval(live ? 30_000 : 120_000, lite)
       },
       revalidateOnFocus: true,
       dedupingInterval: 10_000,
@@ -60,6 +63,7 @@ export function useMatchDetail(
   id: number | string | null,
   initial?: { match: MatchDetail; headToHead: Match[] }
 ) {
+  const { enabled: lite } = useLiteMode()
   const { data, error, isLoading } = useSWR<MatchDetailResponse>(
     id ? `/api/match/${id}` : null,
     fetcher,
@@ -67,7 +71,7 @@ export function useMatchDetail(
       fallbackData: initial,
       refreshInterval: (latest) => {
         const status = latest?.match?.status
-        return status === 'IN_PLAY' || status === 'PAUSED' ? 30_000 : 0
+        return litePollInterval(status === 'IN_PLAY' || status === 'PAUSED' ? 30_000 : 0, lite)
       },
       revalidateOnFocus: true,
       keepPreviousData: true,
@@ -84,16 +88,29 @@ export function useMatchDetail(
 
 type StandingsResponse = CompetitionStandings & { error?: string }
 
-/** League table. Changes only after matches, so no polling. */
-export function useStandings(competition: string | null, initial?: StandingsTable[]) {
+/**
+ * League table. Changes only after matches, so no polling.
+ *
+ * `view` picks the overall table or the computed home/away split (PRD LG-1).
+ * The overall URL is unchanged, so the server-rendered `initial` (which is
+ * the overall table) only ever seeds that key.
+ */
+export function useStandings(
+  competition: string | null,
+  initial?: StandingsTable[],
+  view: StandingsView = 'total'
+) {
+  const total = view === 'total'
   const { data, error, isLoading } = useSWR<StandingsResponse>(
-    competition ? `/api/standings?competition=${competition}` : null,
+    competition ? `/api/standings?competition=${competition}${total ? '' : `&view=${view}`}` : null,
     fetcher,
     {
       // The server copy carries the tables only; competition and season arrive with the first fetch.
-      fallbackData: initial ? ({ standings: initial } as StandingsResponse) : undefined,
+      fallbackData: total && initial ? ({ standings: initial } as StandingsResponse) : undefined,
       revalidateOnFocus: false,
-      keepPreviousData: true,
+      // Not across views: switching to Home must show a loading state, never
+      // the overall table under a "Home" label.
+      keepPreviousData: false,
     }
   )
 

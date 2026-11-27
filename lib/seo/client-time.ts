@@ -1,10 +1,9 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import { formatKickoffTime } from '@/lib/utils'
 
 /**
- * Hydration-safe dates and times for server-rendered views.
+ * Hydration-safe rendering for server-rendered views.
  *
  * Kick-off times are shown in the viewer's own timezone, which the server
  * cannot know. If the server rendered its own local time, the browser's first
@@ -15,6 +14,9 @@ import { formatKickoffTime } from '@/lib/utils'
  * useSyncExternalStore gives exactly that: the server snapshot (false) is used
  * for SSR and hydration, the client snapshot (true) for everything after,
  * including client-side navigations, which never see the UTC flash.
+ *
+ * Kick-off times and dates themselves go through `useKickoffTime`
+ * (hooks/useKickoffTime.ts), which builds on this.
  */
 
 const subscribe = () => () => {}
@@ -25,25 +27,4 @@ export function useIsClient(): boolean {
     () => true,
     () => false
   )
-}
-
-const UTC_TIME = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'UTC',
-})
-
-/** 24-hour kick-off time: local once on the client, UTC before that. */
-export function kickoffTime(utcDate: string, local: boolean): string {
-  return local ? formatKickoffTime(utcDate) : UTC_TIME.format(new Date(utcDate))
-}
-
-/** en-GB short date: local once on the client, UTC before that. */
-export function shortDate(
-  utcDate: string,
-  local: boolean,
-  options: Pick<Intl.DateTimeFormatOptions, 'day' | 'month' | 'year'>
-): string {
-  return new Date(utcDate).toLocaleDateString('en-GB', local ? options : { ...options, timeZone: 'UTC' })
 }

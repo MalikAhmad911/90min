@@ -11,6 +11,7 @@ import { FixturesPanel } from './FixturesPanel'
 import { LeadersPanel } from './LeadersPanel'
 import { FollowButton } from '@/components/follow/FollowButton'
 import type { Scorer, StandingsTable as StandingsTableData } from '@/lib/types'
+import type { StandingsView } from '@/lib/standings-splits'
 
 type Tab = 'table' | 'fixtures' | 'scorers' | 'stats'
 
@@ -95,32 +96,82 @@ function ScorersPanel({ code, initial }: { code: string; initial?: Scorer[] }) {
   )
 }
 
+const VIEWS: { id: StandingsView; label: string }[] = [
+  { id: 'total', label: 'All' },
+  { id: 'home', label: 'Home' },
+  { id: 'away', label: 'Away' },
+]
+
+/** All / Home / Away switch above the table (PRD LG-1). */
+function ViewSwitch({ view, onChange }: { view: StandingsView; onChange: (view: StandingsView) => void }) {
+  return (
+    <div className="px-3 py-2 border-b border-divider">
+      <div role="group" aria-label="Table view" className="inline-flex rounded-full bg-bg-elevated p-0.5">
+        {VIEWS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={view === id}
+            onClick={() => onChange(id)}
+            className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-green ${
+              view === id
+                ? 'bg-bg-surface text-content-primary font-semibold'
+                : 'text-content-secondary hover:text-content-primary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const VIEW_TYPE: Record<StandingsView, string> = { total: 'TOTAL', home: 'HOME', away: 'AWAY' }
+
 function TablePanel({ code, initial }: { code: string; initial?: StandingsTableData[] }) {
-  const { standings, error, isLoading } = useStandings(code, initial)
+  const [view, setView] = useState<StandingsView>('total')
+  const { standings, error, isLoading } = useStandings(code, initial, view)
 
-  if (isLoading && standings.length === 0) return <Loading />
+  // Cups publish several tables (TOTAL plus HOME/AWAY splits) - show the ones
+  // for the chosen view, which for "All" is what a league ladder means to a reader.
+  const tables = standings.filter((t) => t.type === VIEW_TYPE[view] || (view === 'total' && standings.length === 1))
+
+  let body: React.ReactNode
+  if (isLoading && standings.length === 0) body = <Loading />
   // Keep a server-rendered table on screen if a later refresh fails.
-  if (error && standings.length === 0) return <Empty title="Could not load the table" hint={error} />
-
-  // Cups publish several tables (TOTAL plus HOME/AWAY splits) - show the
-  // overall ones only, which is what a league ladder means to a reader.
-  const tables = standings.filter((t) => t.type === 'TOTAL' || standings.length === 1)
-
-  if (tables.length === 0) {
-    return (
-      <Empty
-        title="No table available"
-        hint="Knockout rounds and some cups have no league table."
-      />
+  else if (error && standings.length === 0) body = <Empty title="Could not load the table" hint={error} />
+  else if (tables.length === 0) {
+    body =
+      view === 'total' ? (
+        <Empty title="No table available" hint="Knockout rounds and some cups have no league table." />
+      ) : (
+        <Empty title={`No ${view} table available`} />
+      )
+  } else {
+    body = (
+      <div className="divide-y divide-divider">
+        {tables.map((t, i) => (
+          <StandingsTable
+            key={`${t.type}-${t.stage}-${t.group ?? i}`}
+            table={t}
+            showGroup={tables.length > 1}
+            competitionCode={code}
+          />
+        ))}
+      </div>
     )
   }
 
+  // No overall table at all (a knockout-only cup): a Home/Away switch would
+  // only lead to more empty states.
+  if (view === 'total' && !isLoading && tables.length === 0) return body
+
   return (
-    <div className="divide-y divide-divider">
-      {tables.map((t, i) => (
-        <StandingsTable key={`${t.stage}-${t.group ?? i}`} table={t} showGroup={tables.length > 1} competitionCode={code} />
-      ))}
-    </div>
+    <>
+      <ViewSwitch view={view} onChange={setView} />
+      {body}
+    </>
   )
 }
 

@@ -5,13 +5,15 @@ import useSWR from 'swr'
 import { Radio, Play } from 'lucide-react'
 import { StreamPlayer } from './StreamPlayer'
 import type { Channel, FreeStream } from '@/lib/tv/types'
+import { litePollInterval, useLiteMode } from '@/hooks/useLiteMode'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 /** Standalone Live TV channels that play directly — independent of matches. */
 export function LiveTV() {
+  const { enabled: lite } = useLiteMode()
   const { data } = useSWR<{ channels: Channel[] }>('/api/channels', fetcher, {
-    refreshInterval: 60_000,
+    refreshInterval: litePollInterval(60_000, lite),
   })
   const channels = data?.channels ?? []
   const [active, setActive] = useState<Channel | null>(null)
