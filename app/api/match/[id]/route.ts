@@ -53,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // still served, just without the timeline.
     const [enriched, headToHead] = await Promise.all([
       withMatchEvents(match).catch((err): Match & MatchEventsExtras => {
-        console.warn('[match] goal events unavailable:', err instanceof Error ? err.message : err)
+        console.warn('[match] match events/details unavailable:', err instanceof Error ? err.message : err)
         return match
       }),
       getHeadToHead(id, 10),
@@ -63,7 +63,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json(
       // `attribution` sits at the top level as well as on the match, so any
       // consumer of this payload sees the ODbL notice without digging.
-      { match: enriched, headToHead, source: 'database', ...(attribution ? { attribution } : {}) },
+      // Events, lineups and statistics ride on `match`; `detailsSource` names
+      // their provider for the attribution line.
+      {
+        match: enriched,
+        headToHead,
+        source: 'database',
+        ...(attribution ? { attribution } : {}),
+        ...(enriched.detailsSource ? { detailsSource: enriched.detailsSource } : {}),
+      },
       { headers: { 'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=86400' } }
     )
   } catch (err) {

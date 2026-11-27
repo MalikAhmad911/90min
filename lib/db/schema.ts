@@ -626,6 +626,50 @@ export const matchEvents = pgTable(
   ]
 )
 
+/* ------------------------------------------------------------------ *
+ * Match details from an enrichment provider (Highlightly)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Lineups and team statistics for one match, already normalised to our
+ * shapes (MatchLineupsData, MatchStatLine[] in lib/types.ts) - never the
+ * provider's raw payload. Events live in match_events.
+ *
+ * `is_final` = fetched after the match finished upstream; such a row is
+ * never refetched, which is what keeps a 100-requests-a-day plan workable.
+ */
+export const matchDetails = pgTable(
+  'match_details',
+  {
+    matchId: integer('match_id')
+      .primaryKey()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    lineups: jsonb('lineups'),
+    statistics: jsonb('statistics'),
+    venue: text('venue'),
+    referee: text('referee'),
+    /** Upstream state when last fetched, e.g. 'Finished', 'Second half'. */
+    upstreamState: text('upstream_state'),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+    lineupsFetchedAt: timestamp('lineups_fetched_at', { withTimezone: true }),
+    isFinal: boolean('is_final').notNull().default(false),
+  },
+  (t) => [
+    // The sync's "what still needs fetching" scan.
+    index('match_details_pending_idx').on(t.fetchedAt).where(sql`NOT is_final`),
+    check('match_details_provider_not_blank', sql`length(btrim(provider)) > 0`),
+    check(
+      'match_details_lineups_is_object',
+      sql`lineups IS NULL OR jsonb_typeof(lineups) = 'object'`
+    ),
+    check(
+      'match_details_statistics_is_array',
+      sql`statistics IS NULL OR jsonb_typeof(statistics) = 'array'`
+    ),
+  ]
+)
+
 export type CompetitionRow = typeof competitions.$inferSelect
 export type TeamRow = typeof teams.$inferSelect
 export type MatchRow = typeof matches.$inferSelect
@@ -643,3 +687,4 @@ export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect
 export type MatchSignalRow = typeof matchSignals.$inferSelect
 export type NotificationLogRow = typeof notificationLog.$inferSelect
 export type MatchEventRow = typeof matchEvents.$inferSelect
+export type MatchDetailsRow = typeof matchDetails.$inferSelect
