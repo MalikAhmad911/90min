@@ -6,12 +6,20 @@ import { TopNav } from '@/components/layout/TopNav'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { LeftSidebar } from '@/components/layout/LeftSidebar'
 import { RightSidebar } from '@/components/layout/RightSidebar'
+import { SITE_NAME, getSiteUrl } from '@/lib/seo/site'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
+  // Resolves every relative canonical / OpenGraph URL on the site.
+  metadataBase: new URL(getSiteUrl()),
   title: '90 Min Tactics — Live Football Scores',
   description: 'Real-time football scores, lineups, tables and stats.',
+  applicationName: SITE_NAME,
+  // No og:title here: pages without their own openGraph inherit this object,
+  // and a site-wide title would mislabel every one of them when shared.
+  openGraph: { type: 'website', siteName: SITE_NAME },
+  twitter: { card: 'summary' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

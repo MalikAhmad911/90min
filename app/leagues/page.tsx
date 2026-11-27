@@ -6,6 +6,7 @@ import { Crest } from '@/components/ui/Crest'
 export const metadata: Metadata = {
   title: 'Leagues | 90 Min Tactics',
   description: 'League tables, fixtures and top scorers.',
+  alternates: { canonical: '/leagues' },
 }
 
 export default function LeaguesPage() {

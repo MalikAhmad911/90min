@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { ArrowLeft, Calendar, Users, MapPin } from 'lucide-react'
 import { useTeam } from '@/hooks/useMatches'
 import { TeamCrest } from '@/components/ui/TeamCrest'
-import { isLive, formatKickoffTime } from '@/lib/utils'
-import type { Match } from '@/lib/types'
+import { isLive } from '@/lib/utils'
+import { kickoffTime, shortDate, useIsClient } from '@/lib/seo/client-time'
+import type { Match, TeamDetail } from '@/lib/types'
 
 type Tab = 'matches' | 'squad'
 
@@ -15,11 +16,9 @@ function MatchRow({ match, teamId }: { match: Match; teamId: number }) {
   const opponent = isHome ? match.awayTeam : match.homeTeam
   const played = match.status !== 'SCHEDULED' && match.status !== 'TIMED'
   const live = isLive(match.status)
+  const local = useIsClient()
 
-  const date = new Date(match.utcDate).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  })
+  const date = shortDate(match.utcDate, local, { day: 'numeric', month: 'short' })
 
   // Result letter from this team's point of view.
   let result: 'W' | 'D' | 'L' | null = null
@@ -58,7 +57,7 @@ function MatchRow({ match, teamId }: { match: Match; teamId: number }) {
         </span>
       ) : (
         <span className="shrink-0 text-[12px] text-content-secondary tabular-nums">
-          {formatKickoffTime(match.utcDate)}
+          {kickoffTime(match.utcDate, local)}
         </span>
       )}
       {result && (
@@ -72,9 +71,24 @@ function MatchRow({ match, teamId }: { match: Match; teamId: number }) {
   )
 }
 
-export function TeamView({ id }: { id: string }) {
-  const { team, matches, error, isLoading } = useTeam(id)
+export function TeamView({
+  id,
+  initialData,
+  renderedAt,
+}: {
+  id: string
+  /** Team and matches from the database at render time (no squad). */
+  initialData?: { team: TeamDetail; matches: Match[] }
+  /**
+   * The server's clock when it rendered, so hydration splits fixtures from
+   * results at the same instant the server did. A cached page can be minutes
+   * old, and a match crossing "now" in between would otherwise mismatch.
+   */
+  renderedAt?: number
+}) {
+  const { team, matches, error, isLoading } = useTeam(id, initialData)
   const [tab, setTab] = useState<Tab>('matches')
+  const isClient = useIsClient()
 
   if (isLoading && !team) {
     return (
@@ -85,7 +99,9 @@ export function TeamView({ id }: { id: string }) {
     )
   }
 
-  if (error || !team) {
+  // A failed refresh keeps the team already on screen; the error state is
+  // only for when there is nothing to show.
+  if (!team) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <p className="text-sm font-medium text-content-secondary">Could not load this team</p>
@@ -101,7 +117,7 @@ export function TeamView({ id }: { id: string }) {
   const squad = team.squad ?? []
 
   // Newest first for results, soonest first for fixtures.
-  const now = Date.now()
+  const now = !isClient && renderedAt !== undefined ? renderedAt : Date.now()
   const upcoming = matches
     .filter((m) => new Date(m.utcDate).getTime() >= now)
     .slice(0, 10)

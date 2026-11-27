@@ -7,6 +7,7 @@ import { useStandings, useScorers } from '@/hooks/useMatches'
 import type { CompetitionMeta } from '@/lib/competitions'
 import { Crest } from '@/components/ui/Crest'
 import { StandingsTable } from './StandingsTable'
+import type { Scorer, StandingsTable as StandingsTableData } from '@/lib/types'
 
 type Tab = 'table' | 'scorers'
 
@@ -38,11 +39,12 @@ function Loading() {
   )
 }
 
-function ScorersPanel({ code }: { code: string }) {
-  const { scorers, error, isLoading } = useScorers(code, 20)
+function ScorersPanel({ code, initial }: { code: string; initial?: Scorer[] }) {
+  const { scorers, error, isLoading } = useScorers(code, 20, initial)
 
   if (isLoading && scorers.length === 0) return <Loading />
-  if (error) return <Empty title="Could not load top scorers" hint={error} />
+  // Keep server-rendered scorers on screen if a later refresh fails.
+  if (error && scorers.length === 0) return <Empty title="Could not load top scorers" hint={error} />
   if (scorers.length === 0) {
     return (
       <Empty
@@ -88,11 +90,12 @@ function ScorersPanel({ code }: { code: string }) {
   )
 }
 
-function TablePanel({ code }: { code: string }) {
-  const { standings, error, isLoading } = useStandings(code)
+function TablePanel({ code, initial }: { code: string; initial?: StandingsTableData[] }) {
+  const { standings, error, isLoading } = useStandings(code, initial)
 
   if (isLoading && standings.length === 0) return <Loading />
-  if (error) return <Empty title="Could not load the table" hint={error} />
+  // Keep a server-rendered table on screen if a later refresh fails.
+  if (error && standings.length === 0) return <Empty title="Could not load the table" hint={error} />
 
   // Cups publish several tables (TOTAL plus HOME/AWAY splits) - show the
   // overall ones only, which is what a league ladder means to a reader.
@@ -116,7 +119,20 @@ function TablePanel({ code }: { code: string }) {
   )
 }
 
-export function LeagueView({ competition }: { competition: CompetitionMeta }) {
+export function LeagueView({
+  competition,
+  initialStandings,
+  initialScorers,
+}: {
+  competition: CompetitionMeta
+  /**
+   * Server-rendered data. Passed only when non-empty: an empty table may just
+   * mean "not synced yet", and the API's first fetch is what fills it, so the
+   * view should show its loading state rather than a premature "no table".
+   */
+  initialStandings?: StandingsTableData[]
+  initialScorers?: Scorer[]
+}) {
   const [tab, setTab] = useState<Tab>('table')
 
   return (
@@ -165,7 +181,11 @@ export function LeagueView({ competition }: { competition: CompetitionMeta }) {
       </div>
 
       <Panel>
-        {tab === 'table' ? <TablePanel code={competition.code} /> : <ScorersPanel code={competition.code} />}
+        {tab === 'table' ? (
+          <TablePanel code={competition.code} initial={initialStandings} />
+        ) : (
+          <ScorersPanel code={competition.code} initial={initialScorers} />
+        )}
       </Panel>
     </div>
   )
