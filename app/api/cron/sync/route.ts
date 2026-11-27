@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runSync, syncResource } from '@/lib/server/ingest'
 import { isDatabaseConfigured } from '@/lib/db'
+import { dispatchPendingSignals } from '@/lib/notify/dispatch'
 
 /**
  * Pulls fresh data from football-data into Postgres.
@@ -44,6 +45,9 @@ export async function GET(req: NextRequest) {
   try {
     const results = only ? [await syncResource(only)] : await runSync(limit)
     const failed = results.filter((r) => !r.ok)
+    // Sends pushes for whatever the sync just detected. Never throws, and
+    // claims nothing when VAPID keys are not configured.
+    const notify = await dispatchPendingSignals({ windowMinutes: 15 })
 
     return NextResponse.json(
       {
@@ -51,6 +55,7 @@ export async function GET(req: NextRequest) {
         synced: results.length,
         rows: results.reduce((n, r) => n + r.rows, 0),
         results,
+        notify,
       },
       { status: failed.length === results.length && results.length > 0 ? 502 : 200 }
     )

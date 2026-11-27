@@ -13,6 +13,17 @@ import {
 import { FREE_COMPETITIONS } from '@/lib/competitions'
 import { fresh } from '@/lib/api/football-data'
 import type { Match, CompetitionStandings, Scorer } from '@/lib/types'
+import { recordSignals } from '@/lib/notify/signals'
+import {
+  loadSquad,
+  parseSquadResource,
+  squadResources,
+  loadPlayersFromScorers,
+  loadEnrichment,
+  SCORERS_RESOURCE,
+  ENRICH_RESOURCE,
+} from '@/lib/server/sync/players'
+import { syncOpenLigaDbEvents } from '@/lib/server/sync/openligadb'
 
 /**
  * Writes provider data into Postgres.
@@ -177,6 +188,10 @@ export async function upsertMatches(list: Match[]): Promise<number> {
 
   await upsertTeams(usable.flatMap((m) => [m.homeTeam, m.awayTeam]))
   await upsertSeasons(usable)
+
+  // Diffs against the stored rows, so it must run before they are overwritten.
+  // Never throws: a notification failure must not block the score update.
+  await recordSignals(usable)
 
   const db = getDb()
   for (const part of chunk(usable, BATCH)) {
@@ -512,6 +527,11 @@ export async function staleResources(limit = 4): Promise<string[]> {
     add(`standings:${c.code}`, 6 * 60 * 60_000)
     add(`scorers:${c.code}`, 24 * 60 * 60_000)
   }
+  // Player resources cost little or no football-data quota.
+  add(SCORERS_RESOURCE, 24 * 60 * 60_000)
+  add(ENRICH_RESOURCE, 15 * 60_000)
+  // One request per club, refreshed weekly; Premier League clubs first.
+  for (const r of await squadResources({ competition: 'PL' })) add(r, 7 * 24 * 60 * 60_000)
 
   // Stalest first, so nothing is starved.
   candidates.sort((a, b) => b.age - a.age)
@@ -530,7 +550,16 @@ export async function syncResource(resource: string): Promise<SyncResult> {
   await ensureCompetitions()
 
   if (resource === 'live-window') return syncLiveWindow()
+
+  const squadTeam = parseSquadResource(resource)
+  if (squadTeam) return run(resource, () => loadSquad(squadTeam))
+  if (resource === SCORERS_RESOURCE) return run(resource, loadPlayersFromScorers)
+  if (resource === ENRICH_RESOURCE) return run(resource, () => loadEnrichment({ limit: 8 }))
+
   const [kind, code] = resource.split(':')
+  // OpenLigaDB keeps its own sync_state rows and throttles itself.
+  if (kind === 'events' && code === 'BL1') return syncOpenLigaDbEvents('bl1')
+  if (kind === 'events' && code === 'CL') return syncOpenLigaDbEvents('ucl')
   if (kind === 'season') return syncSeason(code)
   if (kind === 'standings') return syncStandings(code)
   if (kind === 'scorers') return syncScorers(code)
@@ -547,5 +576,9 @@ export async function runSync(limit = 4): Promise<SyncResult[]> {
   for (const resource of due) {
     results.push(await syncResource(resource))
   }
+  // Outside the limit above: these use no football-data quota and make no
+  // upstream request at all unless a match is live or a refresh is due.
+  results.push(await syncOpenLigaDbEvents('bl1'))
+  results.push(await syncOpenLigaDbEvents('ucl'))
   return results
 }
