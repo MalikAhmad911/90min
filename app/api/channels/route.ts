@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readChannels, addChannel, removeChannel } from '@/lib/server/store'
 import { requireAdmin } from '@/lib/server/auth'
-import type { Channel } from '@/lib/tv/types'
+import { consume, tooManyRequests, ADMIN_MUTATION_LIMIT } from '@/lib/server/rate-limit'
+import { channelsPostSchema } from '@/lib/validation/streams'
+import { parseJsonBody } from '@/lib/validation/request'
 
-// Public: the Live TV section reads channels.
+// Public: the Live TV section reads channels. Not rate limited - see
+// ADMIN_MUTATION_LIMIT for why public reads stay write-free.
 export async function GET() {
   const channels = await readChannels()
   return NextResponse.json({ channels })
-}
-
-function isValidNewChannel(c: unknown): c is Omit<Channel, 'id'> {
-  if (!c || typeof c !== 'object') return false
-  const v = c as Record<string, unknown>
-  return (
-    typeof v.name === 'string' &&
-    v.name.trim().length > 0 &&
-    (v.kind === 'youtube' || v.kind === 'hls') &&
-    typeof v.src === 'string' &&
-    v.src.trim().length > 0
-  )
 }
 
 // Admin only: add a channel, or remove one by id.
@@ -28,26 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: { action?: string; channel?: unknown; id?: string }
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
-  }
+  const limited = await consume('admin-mutation', session.sub, ADMIN_MUTATION_LIMIT)
+  if (!limited.allowed) return tooManyRequests(limited)
+
+  const parsed = await parseJsonBody(req, channelsPostSchema)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
 
   if (body.action === 'add') {
-    if (!isValidNewChannel(body.channel)) {
-      return NextResponse.json({ error: 'Invalid channel payload' }, { status: 400 })
-    }
-    const c = body.channel
-    await addChannel({ name: c.name.trim(), kind: c.kind, src: c.src.trim() })
-  } else if (body.action === 'remove') {
-    if (!body.id) {
-      return NextResponse.json({ error: 'id required' }, { status: 400 })
-    }
-    await removeChannel(body.id)
+    // Explicit fields from the validated payload, never a spread of the request.
+    const { name, kind, src } = body.channel
+    await addChannel({ name, kind, src })
   } else {
-    return NextResponse.json({ error: 'action must be add or remove' }, { status: 400 })
+    await removeChannel(body.id)
   }
 
   return NextResponse.json({ channels: await readChannels() })
