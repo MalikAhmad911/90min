@@ -80,8 +80,8 @@ function TeamLineup({ team }: { team: MatchTeam }) {
 
 /** "E. Martínez" stays; "Joshua Kofi Acheampong" -> "Acheampong" so chips stay short. */
 export function pitchName(name: string): string {
-  const parts = name.trim().split(/s+/)
-  if (parts.length <= 1 || /^[A-Z].$/.test(parts[0])) return name.trim()
+  const parts = name.trim().split(/\s+/)
+  if (parts.length <= 1 || /^\p{Lu}\.$/u.test(parts[0])) return name.trim()
   return parts[parts.length - 1]
 }
 
