@@ -1,7 +1,8 @@
 'use client'
 
 import { CalendarDays } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { addDays } from '@/lib/timezone'
+import { formatDate, formatYmd } from '@/lib/utils'
 
 /**
  * What a day with no football should look like.
@@ -12,25 +13,16 @@ import { formatDate } from '@/lib/utils'
  * somewhere to go - the next weekend is almost always full.
  */
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00`)
-  d.setDate(d.getDate() + days)
-  return formatDate(d)
-}
-
 /** The next Saturday strictly after `dateStr`. */
 function nextSaturday(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00`)
-  const delta = ((6 - d.getDay() + 7) % 7) || 7
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  const delta = ((6 - weekday + 7) % 7) || 7
   return addDays(dateStr, delta)
 }
 
 function label(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  })
+  return formatYmd(dateStr, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 interface EmptyDayProps {
@@ -38,10 +30,14 @@ interface EmptyDayProps {
   onDateChange: (date: string) => void
   /** Set when a filter is active, so we can say so instead of blaming the calendar. */
   filterLabel?: string
+  /** Overrides the filter sentence entirely, e.g. for hidden competitions. */
+  filterMessage?: string
+  /** Today in the user's zone. Defaults to the UTC date for older callers. */
+  today?: string
 }
 
-export function EmptyDay({ date, onDateChange, filterLabel }: EmptyDayProps) {
-  const today = formatDate(new Date())
+export function EmptyDay({ date, onDateChange, filterLabel, filterMessage, today: todayProp }: EmptyDayProps) {
+  const today = todayProp ?? formatDate(new Date())
   const saturday = nextSaturday(date)
 
   const suggestions = [
@@ -50,12 +46,12 @@ export function EmptyDay({ date, onDateChange, filterLabel }: EmptyDayProps) {
     { key: 'saturday', date: saturday, text: label(saturday) },
   ].filter((s, i, all) => s.date !== date && all.findIndex((x) => x.date === s.date) === i)
 
-  if (filterLabel) {
+  if (filterLabel || filterMessage) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
         <CalendarDays size={28} className="text-content-muted mb-3" aria-hidden="true" />
         <p className="text-sm font-medium text-content-secondary">
-          No {filterLabel.toLowerCase()} matches
+          {filterMessage ?? `No ${filterLabel!.toLowerCase()} matches`}
         </p>
         <p className="text-xs text-content-muted mt-1">
           There are matches on this date — clear the filter to see them.
