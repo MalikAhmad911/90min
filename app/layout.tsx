@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/providers/ThemeProvider'
@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/layout/BottomNav'
 import { LeftSidebar } from '@/components/layout/LeftSidebar'
 import { RightSidebar } from '@/components/layout/RightSidebar'
 import { SITE_NAME, getSiteUrl } from '@/lib/seo/site'
+import { ServiceWorkerRegister } from '@/components/layout/ServiceWorkerRegister'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
@@ -20,6 +21,12 @@ export const metadata: Metadata = {
   // and a site-wide title would mislabel every one of them when shared.
   openGraph: { type: 'website', siteName: SITE_NAME },
   twitter: { card: 'summary' },
+  appleWebApp: { capable: true, title: '90 Min', statusBarStyle: 'black-translucent' },
+  icons: { apple: '/app-icon/192' },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#0A0A0A',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
           <BottomNav />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

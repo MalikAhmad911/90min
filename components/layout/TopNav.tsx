@@ -10,6 +10,7 @@ import { MobileSearchSheet } from '@/components/search/MobileSearchSheet'
 
 const NAV_LINKS = [
   { href: '/watch', label: 'Watch' },
+  { href: '/highlights', label: 'Highlights' },
   { href: '/news', label: 'News' },
   { href: '/transfers', label: 'Transfers' },
   { href: '/more', label: 'About' },
@@ -39,19 +40,16 @@ export function TopNav() {
       <div className="max-w-[1100px] mx-auto h-full flex items-center gap-4 px-4">
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="relative w-8 h-8">
-            <Image
-              src="/logo.svg"
-              alt="90 Min Tactics"
-              fill
-              sizes="32px"
-              className="object-contain"
-              priority
-            />
-          </div>
-          <span className="hidden sm:block font-black text-sm tracking-[0.15em] uppercase text-content-primary">
-            90MIN
+        <Link href="/" aria-label="90 Min Tactics home" className="flex items-center gap-2 shrink-0">
+          <Image src="/logo.svg" alt="" width={32} height={32} priority className="h-8 w-8 shrink-0" />
+          <span className="flex flex-col justify-center leading-none" aria-hidden="true">
+            <span className="font-black text-[15px] tracking-tight">
+              <span className="text-accent-green">90</span>
+              <span className="text-content-primary">MIN</span>
+            </span>
+            <span className="mt-0.5 text-[8px] font-bold tracking-[0.34em] text-content-muted">
+              TACTICS
+            </span>
           </span>
         </Link>
 

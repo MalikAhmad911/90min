@@ -1,21 +1,51 @@
 /*
- * 90 Min Tactics service worker: Web Push only.
+ * 90 Min Tactics service worker: Web Push and an offline page.
  *
- * Deliberately no fetch handler and no caching. A caching worker that goes
- * wrong serves stale scores with no way for the user to notice; this one
- * only shows notifications and routes clicks.
+ * Deliberately no content caching. A caching worker that goes wrong serves
+ * stale scores with no way for the user to notice; this one only shows
+ * notifications, routes clicks, and swaps in /offline when there is no network.
  *
  * Payload (JSON, built by lib/notify/dispatch.ts):
  *   { title, body, url: '/match/123', tag: 'match-123', matchId, signalId, type }
  */
 
-self.addEventListener('install', () => {
-  // Nothing to precache; take over immediately so a new version applies at once.
-  self.skipWaiting()
+const OFFLINE_CACHE = 'offline-v1'
+const OFFLINE_URL = '/offline'
+
+self.addEventListener('install', (event) => {
+  // Precache only the offline page; take over immediately.
+  event.waitUntil(
+    caches
+      .open(OFFLINE_CACHE)
+      .then((cache) => cache.add(new Request(OFFLINE_URL, { cache: 'reload' })))
+      .catch(() => undefined)
+      .then(() => self.skipWaiting())
+  )
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== OFFLINE_CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  )
+})
+
+/*
+ * Page navigations only, network first. Scores are never served from a cache:
+ * the cached offline page appears only when the network itself fails.
+ * API calls, images and scripts are not intercepted at all.
+ */
+self.addEventListener('fetch', (event) => {
+  const req = event.request
+  if (req.mode !== 'navigate' || req.method !== 'GET') return
+  event.respondWith(
+    fetch(req).catch(async () => {
+      const cached = await caches.match(OFFLINE_URL)
+      return cached || Response.error()
+    })
+  )
 })
 
 /** Only same-origin paths are followed: a payload must not send users off-site. */

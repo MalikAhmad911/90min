@@ -12,6 +12,7 @@ import { MatchEvents } from './MatchEvents'
 import { MatchStats } from './MatchStats'
 import { MatchLineups } from './MatchLineups'
 import { ScorersSummary } from './ScorersSummary'
+import { MatchHighlight } from '@/components/highlights/MatchHighlight'
 import { FollowButton } from '@/components/follow/FollowButton'
 import type { Match, MatchDetail } from '@/lib/types'
 
@@ -235,6 +236,8 @@ export function MatchDetailView({
           </div>
         )}
       </div>
+
+      <MatchHighlight matchId={match.id} status={match.status} />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-divider overflow-x-auto scrollbar-hide">
