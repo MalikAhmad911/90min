@@ -7,14 +7,11 @@ import {
   standings,
   scorers,
   syncState,
+  seasons,
+  providerMap,
 } from '@/lib/db/schema'
 import { FREE_COMPETITIONS } from '@/lib/competitions'
-import {
-  fetchMatchesByDate,
-  fetchCompetitionMatches,
-  fetchStandings,
-  fetchScorers,
-} from '@/lib/api/football-data'
+import { fresh } from '@/lib/api/football-data'
 import type { Match, CompetitionStandings, Scorer } from '@/lib/types'
 
 /**
@@ -42,6 +39,64 @@ function chunk<T>(items: T[], size: number): T[][] {
 /* ------------------------------------------------------------------ *
  * Upserts
  * ------------------------------------------------------------------ */
+
+/** The provider every row in this file comes from. */
+const PROVIDER = 'football-data'
+
+/**
+ * Records that a football-data id names one of our rows. Because football-data
+ * ids are the canonical keys, the mapping is the identity - but writing it
+ * means a second provider can be mapped alongside without any special case
+ * for the first one.
+ */
+async function mapIds(
+  entityType: 'team' | 'match' | 'season',
+  ids: (number | string)[]
+): Promise<void> {
+  const unique = [...new Set(ids.map(String))]
+  if (unique.length === 0) return
+
+  const db = getDb()
+  for (const part of chunk(unique, BATCH)) {
+    await db
+      .insert(providerMap)
+      .values(part.map((id) => ({ provider: PROVIDER, entityType, providerId: id, ourKey: id })))
+      .onConflictDoNothing()
+  }
+}
+
+/** Seasons arrive embedded in every match; collect and upsert the distinct ones. */
+async function upsertSeasons(list: Match[]): Promise<void> {
+  const byId = new Map<number, { season: NonNullable<Match['season']>; code: string }>()
+  for (const m of list) {
+    if (m.season?.id) byId.set(m.season.id, { season: m.season, code: m.competition.code })
+  }
+  if (byId.size === 0) return
+
+  const db = getDb()
+  await db
+    .insert(seasons)
+    .values(
+      [...byId.values()].map(({ season, code }) => ({
+        id: season.id,
+        competitionCode: code,
+        startDate: season.startDate ?? null,
+        endDate: season.endDate ?? null,
+        currentMatchday: season.currentMatchday ?? null,
+      }))
+    )
+    .onConflictDoUpdate({
+      target: seasons.id,
+      set: {
+        startDate: sql`coalesce(excluded.start_date, ${seasons.startDate})`,
+        endDate: sql`coalesce(excluded.end_date, ${seasons.endDate})`,
+        currentMatchday: sql`coalesce(excluded.current_matchday, ${seasons.currentMatchday})`,
+        updatedAt: sql`now()`,
+      },
+    })
+
+  await mapIds('season', [...byId.keys()])
+}
 
 /** Seeds the competition catalogue. Safe to call repeatedly. */
 export async function ensureCompetitions(): Promise<void> {
@@ -121,6 +176,7 @@ export async function upsertMatches(list: Match[]): Promise<number> {
   if (usable.length === 0) return 0
 
   await upsertTeams(usable.flatMap((m) => [m.homeTeam, m.awayTeam]))
+  await upsertSeasons(usable)
 
   const db = getDb()
   for (const part of chunk(usable, BATCH)) {
@@ -141,11 +197,21 @@ export async function upsertMatches(list: Match[]): Promise<number> {
           awayScoreFt: m.score.fullTime.away,
           homeScoreHt: m.score.halfTime.home,
           awayScoreHt: m.score.halfTime.away,
+          seasonId: m.season?.id ?? null,
+          matchday: m.matchday ?? null,
+          venue: m.venue ?? null,
+          referee: m.referee ?? null,
         }))
       )
       .onConflictDoUpdate({
         target: matches.id,
         set: {
+          // These arrive patchily (the live window omits some), so a null in
+          // one payload must never erase a value an earlier sync stored.
+          seasonId: sql`coalesce(excluded.season_id, ${matches.seasonId})`,
+          matchday: sql`coalesce(excluded.matchday, ${matches.matchday})`,
+          venue: sql`coalesce(excluded.venue, ${matches.venue})`,
+          referee: sql`coalesce(excluded.referee, ${matches.referee})`,
           status: sql`excluded.status`,
           minute: sql`excluded.minute`,
           utcDate: sql`excluded.utc_date`,
@@ -159,6 +225,9 @@ export async function upsertMatches(list: Match[]): Promise<number> {
         },
       })
   }
+
+  await mapIds('team', usable.flatMap((m) => [m.homeTeam.id, m.awayTeam.id]))
+  await mapIds('match', usable.map((m) => m.id))
 
   return usable.length
 }
@@ -378,33 +447,31 @@ export interface SyncResult {
  * Sync steps
  * ------------------------------------------------------------------ */
 
-/** Today's and tomorrow's matches - one upstream request, carries live scores. */
+/**
+ * Today's and tomorrow's matches - one upstream request, carries live scores.
+ * Writes both days: the provider answers for both, and tomorrow is exactly
+ * the window where kickoff times and postponements change.
+ */
 export function syncLiveWindow(): Promise<SyncResult> {
-  return run('live-window', async () => {
-    const today = new Date().toISOString().slice(0, 10)
-    const { value } = await fetchMatchesByDate(today)
-    return upsertMatches(value)
-  })
+  return run('live-window', async () => upsertMatches(await fresh.liveWindow()))
 }
 
 /** A competition's whole season of fixtures - one request, every date covered. */
 export function syncSeason(code: string): Promise<SyncResult> {
   return run(`season:${code}`, async () => {
-    const { value } = await fetchCompetitionMatches(code)
-    return upsertMatches(value)
+    return upsertMatches(await fresh.competitionMatches(code))
   })
 }
 
 export function syncStandings(code: string): Promise<SyncResult> {
   return run(`standings:${code}`, async () => {
-    const { value } = await fetchStandings(code)
-    return upsertStandings(code, value)
+    return upsertStandings(code, await fresh.standings(code))
   })
 }
 
 export function syncScorers(code: string): Promise<SyncResult> {
   return run(`scorers:${code}`, async () => {
-    const { value } = await fetchScorers(code, 30)
+    const value = await fresh.scorers(code, 30)
     // The scorers payload does not always carry the season, so fall back to
     // whatever the last standings sync recorded for this competition.
     const stored = await getDb()

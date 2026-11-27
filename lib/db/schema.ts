@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   primaryKey,
   check,
+  jsonb,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -113,6 +114,8 @@ export const matches = pgTable(
     awayScoreHt: integer('away_score_ht'),
     winner: text('winner'),
     venue: text('venue'),
+    /** Main referee's name, when the provider sends one (PRD MC-1). */
+    referee: text('referee'),
     /** The provider's own lastUpdated, used to skip no-op writes. */
     lastUpdated: timestamp('last_updated', { withTimezone: true }),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
@@ -283,6 +286,276 @@ export const syncState = pgTable('sync_state', {
   rowsWritten: integer('rows_written').notNull().default(0),
 })
 
+/* ------------------------------------------------------------------ *
+ * Provider mapping (PRD section 10, ProviderMap)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Translates a provider's ids into ours.
+ *
+ * football-data.org was the first provider, so its ids became the canonical
+ * keys (a team's `teams.id` IS its football-data id). Every later provider -
+ * OpenLigaDB, TheSportsDB, a paid feed - maps its own ids onto those keys
+ * through this table, so adding or swapping a provider never rewrites a
+ * primary key or touches a client.
+ *
+ * `our_key` is text because competitions are keyed by code ('PL') while
+ * everything else is an integer; ingestion is the only reader, so the cast
+ * never sits on a hot path.
+ */
+export const providerMap = pgTable(
+  'provider_map',
+  {
+    provider: text('provider').notNull(),
+    entityType: text('entity_type').notNull(),
+    providerId: text('provider_id').notNull(),
+    ourKey: text('our_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.provider, t.entityType, t.providerId] }),
+    // Each provider names a given entity of ours at most once.
+    uniqueIndex('provider_map_our_key_key').on(t.provider, t.entityType, t.ourKey),
+    check(
+      'provider_map_entity_type_valid',
+      sql`entity_type = ANY (ARRAY['competition','season','team','match','player'])`
+    ),
+    check('provider_map_provider_not_blank', sql`length(btrim(provider)) > 0`),
+  ]
+)
+
+/* ------------------------------------------------------------------ *
+ * Seasons and players (PRD section 10)
+ * ------------------------------------------------------------------ */
+
+export const seasons = pgTable(
+  'seasons',
+  {
+    /** football-data season id. */
+    id: integer('id').primaryKey(),
+    competitionCode: text('competition_code')
+      .notNull()
+      .references(() => competitions.code, { onDelete: 'cascade' }),
+    startDate: date('start_date'),
+    endDate: date('end_date'),
+    currentMatchday: integer('current_matchday'),
+    winnerTeamId: integer('winner_team_id').references(() => teams.id),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('seasons_competition_idx').on(t.competitionCode, t.startDate),
+    check(
+      'seasons_dates_ordered',
+      sql`start_date IS NULL OR end_date IS NULL OR start_date <= end_date`
+    ),
+  ]
+)
+
+export const players = pgTable(
+  'players',
+  {
+    /** football-data person id. */
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    dateOfBirth: date('date_of_birth'),
+    nationality: text('nationality'),
+    position: text('position'),
+    shirtNumber: integer('shirt_number'),
+    heightCm: integer('height_cm'),
+    /** Only a URL we are allowed to display - see the licence notes where it is set. */
+    photoUrl: text('photo_url'),
+    currentTeamId: integer('current_team_id').references(() => teams.id, {
+      onDelete: 'set null',
+    }),
+    /** Wikidata Q-id, when matched, for CC0 biographical enrichment. */
+    wikidataId: text('wikidata_id'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('players_team_idx').on(t.currentTeamId),
+    check('players_name_not_blank', sql`length(btrim(name)) > 0`),
+    check(
+      'players_shirt_number_range',
+      sql`shirt_number IS NULL OR (shirt_number BETWEEN 0 AND 99)`
+    ),
+    check('players_height_range', sql`height_cm IS NULL OR (height_cm BETWEEN 120 AND 230)`),
+  ]
+)
+
+/* ------------------------------------------------------------------ *
+ * Personalisation (PRD MAT-2, ON-1, NT-1)
+ * ------------------------------------------------------------------ */
+
+/** Entity kinds a device can follow. */
+export const FOLLOWABLE = ['team', 'competition', 'match', 'player'] as const
+
+/**
+ * What a device follows.
+ *
+ * Device-based rather than account-based (PRD section 17 leaves accounts
+ * optional): the browser generates an opaque random id on first visit and
+ * sends it with follow requests. Nothing here identifies a person.
+ *
+ * `notify` holds per-follow alert toggles (PRD NT-1), e.g.
+ * {"goals": true, "kickoff": false}. Unknown keys are rejected by the API,
+ * not by the database.
+ */
+export const follows = pgTable(
+  'follows',
+  {
+    deviceId: text('device_id').notNull(),
+    entityType: text('entity_type').notNull(),
+    entityKey: text('entity_key').notNull(),
+    notify: jsonb('notify').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.deviceId, t.entityType, t.entityKey] }),
+    // Fan-out: "every device following team 64".
+    index('follows_entity_idx').on(t.entityType, t.entityKey),
+    check(
+      'follows_entity_type_valid',
+      sql`entity_type = ANY (ARRAY['team','competition','match','player'])`
+    ),
+    check('follows_device_id_shape', sql`length(device_id) BETWEEN 16 AND 64`),
+    check('follows_notify_is_object', sql`jsonb_typeof(notify) = 'object'`),
+  ]
+)
+
+/* ------------------------------------------------------------------ *
+ * Notifications (PRD section 6.4, section 9 event differ)
+ * ------------------------------------------------------------------ */
+
+/** A browser's Web Push subscription (VAPID). */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deviceId: text('device_id').notNull(),
+    /** The push service URL. Unique: resubscribing updates in place. */
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** IANA zone, for quiet hours (PRD NT-4). */
+    timezone: text('timezone').notNull().default('UTC'),
+    locale: text('locale').notNull().default('en'),
+    /** Quiet hours in the device's own zone, 0-23. Both null = never quiet. */
+    quietStartHour: integer('quiet_start_hour'),
+    quietEndHour: integer('quiet_end_hour'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+    /** Consecutive delivery failures; a dead endpoint is pruned past a threshold. */
+    failureCount: integer('failure_count').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('push_subscriptions_endpoint_key').on(t.endpoint),
+    index('push_subscriptions_device_idx').on(t.deviceId),
+    check('push_subscriptions_device_id_shape', sql`length(device_id) BETWEEN 16 AND 64`),
+    check('push_subscriptions_endpoint_https', sql`endpoint LIKE 'https://%'`),
+    check(
+      'push_subscriptions_quiet_hours_range',
+      sql`(quiet_start_hour IS NULL OR quiet_start_hour BETWEEN 0 AND 23)
+          AND (quiet_end_hour IS NULL OR quiet_end_hour BETWEEN 0 AND 23)`
+    ),
+  ]
+)
+
+/** Change signals the event differ can emit (PRD section 9). */
+export const SIGNAL_TYPES = [
+  'KICKOFF',
+  'GOAL',
+  'HALF_TIME',
+  'SECOND_HALF',
+  'FULL_TIME',
+  'SCORE_CORRECTION',
+  'POSTPONED',
+  'CANCELLED',
+] as const
+
+/**
+ * What changed in a match between two syncs.
+ *
+ * The event differ compares a freshly ingested match with the stored row and
+ * writes one signal per change: a score going 1-0 to 2-0 is a GOAL, 2-0 back
+ * to 1-0 is a SCORE_CORRECTION (a VAR-disallowed goal, PRD NT-3). Signals
+ * drive notifications; they are not the event timeline a user reads.
+ *
+ * `seq` is monotonic per match (PRD section 11), and UNIQUE(match_id, seq)
+ * means two racing syncs cannot both record the same change.
+ */
+export const matchSignals = pgTable(
+  'match_signals',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    matchId: integer('match_id')
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    type: text('type').notNull(),
+    /** Score and status after the change, plus the score before it for goals. */
+    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('match_signals_match_seq_key').on(t.matchId, t.seq),
+    // The notifier scans recent signals.
+    index('match_signals_created_idx').on(t.createdAt),
+    check(
+      'match_signals_type_valid',
+      sql`type = ANY (ARRAY['KICKOFF','GOAL','HALF_TIME','SECOND_HALF','FULL_TIME','SCORE_CORRECTION','POSTPONED','CANCELLED'])`
+    ),
+    check('match_signals_seq_positive', sql`seq > 0`),
+  ]
+)
+
+/**
+ * One row per push attempted. The dedupe key is the primary key, so the same
+ * goal reaching one device through three follows sends one push (PRD NT-2).
+ */
+export const notificationLog = pgTable(
+  'notification_log',
+  {
+    dedupeKey: text('dedupe_key').primaryKey(),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: 'cascade' }),
+    signalId: integer('signal_id')
+      .notNull()
+      .references(() => matchSignals.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('notification_log_signal_idx').on(t.signalId),
+    check('notification_log_status_valid', sql`status = ANY (ARRAY['sent','failed','skipped'])`),
+  ]
+)
+
+/* ------------------------------------------------------------------ *
+ * Abuse control (PRD section 12, security)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Hits against a rate-limited action, e.g. bucket 'login', key = client IP.
+ *
+ * In the database rather than in memory because a serverless host runs many
+ * short-lived instances: an in-memory counter would give every instance its
+ * own fresh budget, which is no limit at all.
+ */
+export const rateLimitEvents = pgTable(
+  'rate_limit_events',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    bucket: text('bucket').notNull(),
+    key: text('key').notNull(),
+    hitAt: timestamp('hit_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('rate_limit_events_lookup_idx').on(t.bucket, t.key, t.hitAt)]
+)
+
 export type CompetitionRow = typeof competitions.$inferSelect
 export type TeamRow = typeof teams.$inferSelect
 export type MatchRow = typeof matches.$inferSelect
@@ -292,3 +565,10 @@ export type UserRow = typeof users.$inferSelect
 export type ChannelRow = typeof channels.$inferSelect
 export type StreamOverrideRow = typeof streamOverrides.$inferSelect
 export type SyncStateRow = typeof syncState.$inferSelect
+export type ProviderMapRow = typeof providerMap.$inferSelect
+export type SeasonRow = typeof seasons.$inferSelect
+export type PlayerRow = typeof players.$inferSelect
+export type FollowRow = typeof follows.$inferSelect
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect
+export type MatchSignalRow = typeof matchSignals.$inferSelect
+export type NotificationLogRow = typeof notificationLog.$inferSelect

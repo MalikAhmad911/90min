@@ -174,6 +174,10 @@ interface FDMatch {
   awayTeam: Match['awayTeam']
   score: Match['score']
   competition: Match['competition']
+  matchday?: number | null
+  venue?: string | null
+  referees?: { name?: string | null; type?: string | null }[]
+  season?: Match['season']
 }
 
 function toMatch(m: FDMatch): Match {
@@ -188,6 +192,12 @@ function toMatch(m: FDMatch): Match {
     awayTeam: m.awayTeam,
     score: m.score,
     competition: m.competition,
+    matchday: m.matchday ?? null,
+    venue: m.venue ?? null,
+    // Prefer the main referee; fall back to whoever is listed first.
+    referee:
+      m.referees?.find((r) => r.type === 'REFEREE')?.name ?? m.referees?.[0]?.name ?? null,
+    season: m.season ?? null,
   }
 }
 
@@ -344,6 +354,47 @@ export async function fetchTeamMatches(id: number, limit = 20) {
     const data = await request<{ matches: FDMatch[] }>(`/teams/${id}/matches?limit=${limit}`)
     return (data.matches ?? []).map(toMatch).sort(byKickoff)
   })
+}
+
+/* ------------------------------------------------------------------ *
+ * Fresh loaders - for the ingestion job only
+ * ------------------------------------------------------------------ *
+ * The cached fetchers above are stale-while-revalidate: a stale entry is
+ * returned at once and refreshed behind the caller. That is right for a
+ * page, and exactly wrong for ingestion, whose whole job is to fetch what is
+ * new. Through the cache, every sync wrote whatever the previous sync had
+ * fetched - always one refresh behind, and after a change to the normaliser,
+ * old-shaped objects that silently dropped the new fields.
+ *
+ * These go straight to the provider. They still pass through the rate
+ * limiter, and how often they run is decided by sync_state, not by a cache.
+ */
+export const fresh = {
+  /** Today and tomorrow, with live scores. One request. */
+  async liveWindow(): Promise<Match[]> {
+    const data = await request<{ matches: FDMatch[] }>('/matches')
+    return (data.matches ?? []).map(toMatch).sort(byKickoff)
+  },
+
+  /** A competition's current season of fixtures. One request. */
+  async competitionMatches(code: string): Promise<Match[]> {
+    const data = await request<{ matches: FDMatch[] }>(`/competitions/${code}/matches`)
+    return (data.matches ?? []).map(toMatch).sort(byKickoff)
+  },
+
+  standings(code: string): Promise<CompetitionStandings> {
+    return request<CompetitionStandings>(`/competitions/${code}/standings`)
+  },
+
+  scorers(code: string, limit = 30): Promise<{ scorers: Scorer[]; competition: CompetitionInfo }> {
+    return request<{ scorers: Scorer[]; competition: CompetitionInfo }>(
+      `/competitions/${code}/scorers?limit=${limit}`
+    )
+  },
+
+  team(id: number): Promise<TeamDetail> {
+    return request<TeamDetail>(`/teams/${id}`)
+  },
 }
 
 /** Diagnostics for the admin page - how much quota is left right now. */

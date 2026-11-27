@@ -39,6 +39,17 @@ export interface Match {
     code: string
     emblem: string
   }
+  /** Round number within the season, when the provider sends it. */
+  matchday?: number | null
+  venue?: string | null
+  /** Main referee's name. */
+  referee?: string | null
+  season?: {
+    id: number
+    startDate?: string | null
+    endDate?: string | null
+    currentMatchday?: number | null
+  } | null
 }
 
 export interface GroupedMatches {
