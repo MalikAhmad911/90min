@@ -26,6 +26,11 @@ const root = normaliseRoot(__dirname)
 export default defineConfig({
   plugins: [react()],
   root,
+  // Per-checkout cache. node_modules can be a shared junction across git
+  // worktrees, and the default cache lives inside it (node_modules/.vite), so
+  // concurrent test runs in different worktrees would read and write the same
+  // cache - one such run here reported 55 of 69 tests.
+  cacheDir: path.join(root, '.vite-cache'),
   test: {
     root,
     environment: 'jsdom',
