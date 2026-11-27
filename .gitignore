@@ -49,3 +49,7 @@ next-env.d.ts
 
 # Local-only admin credentials written during a rotation.
 ADMIN-CREDENTIALS.local.txt
+
+# Claude Code local state: agent worktrees and personal settings.
+.claude/worktrees/
+.claude/settings.local.json
