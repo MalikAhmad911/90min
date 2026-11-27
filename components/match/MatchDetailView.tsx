@@ -9,12 +9,12 @@ import { useKickoffTime } from '@/hooks/useKickoffTime'
 import { resolveCompetition } from '@/lib/competitions'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { MatchEvents } from './MatchEvents'
-import { MatchStats } from './MatchStats'
-import { MatchLineups } from './MatchLineups'
+import { MatchStats, hasStatistics } from './MatchStats'
+import { MatchLineups, hasLineups } from './MatchLineups'
 import { ScorersSummary } from './ScorersSummary'
 import { MatchHighlight } from '@/components/highlights/MatchHighlight'
 import { FollowButton } from '@/components/follow/FollowButton'
-import type { Match, MatchDetail } from '@/lib/types'
+import type { Match, MatchDetail, MatchDetailsExtras } from '@/lib/types'
 
 type Tab = 'summary' | 'lineups' | 'stats' | 'h2h'
 
@@ -119,6 +119,15 @@ export function MatchDetailView({
       </div>
     )
   }
+
+  const details = match as MatchDetail & MatchDetailsExtras
+  // Lineups and Stats appear only when there is something to show in them.
+  const visibleTabs = TABS.filter(
+    ({ id: tabId }) =>
+      (tabId !== 'lineups' || hasLineups(match.homeTeam, match.awayTeam, details.lineups)) &&
+      (tabId !== 'stats' || hasStatistics(details))
+  )
+  const activeTab: Tab = visibleTabs.some((t) => t.id === tab) ? tab : 'summary'
 
   const live = isLive(match.status)
   const played = match.status !== 'SCHEDULED' && match.status !== 'TIMED'
@@ -241,13 +250,13 @@ export function MatchDetailView({
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-divider overflow-x-auto scrollbar-hide">
-        {TABS.map(({ id: tabId, label }) => (
+        {visibleTabs.map(({ id: tabId, label }) => (
           <button
             key={tabId}
             type="button"
             onClick={() => setTab(tabId)}
             className={`shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-              tab === tabId
+              activeTab === tabId
                 ? 'bg-accent-green text-bg-primary font-semibold'
                 : 'text-content-secondary hover:text-content-primary hover:bg-bg-elevated'
             }`}
@@ -258,10 +267,17 @@ export function MatchDetailView({
       </div>
 
       <div className="mt-2 mx-2 mb-3 bg-bg-surface rounded-lg overflow-hidden">
-        {tab === 'summary' && <MatchEvents match={match} />}
-        {tab === 'lineups' && <MatchLineups home={match.homeTeam} away={match.awayTeam} />}
-        {tab === 'stats' && <MatchStats match={match} />}
-        {tab === 'h2h' &&
+        {activeTab === 'summary' && <MatchEvents match={match} />}
+        {activeTab === 'lineups' && (
+          <MatchLineups
+            home={match.homeTeam}
+            away={match.awayTeam}
+            lineups={details.lineups}
+            source={details.detailsSource}
+          />
+        )}
+        {activeTab === 'stats' && <MatchStats match={details} />}
+        {activeTab === 'h2h' &&
           (headToHead.length > 0 ? (
             <div className="divide-y divide-divider">
               {headToHead.map((m) => (

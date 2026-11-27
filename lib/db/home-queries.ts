@@ -2,6 +2,7 @@ import { sql, type SQL } from 'drizzle-orm'
 import { getDb } from './index'
 import { addDays, localDayRangeUtc } from '@/lib/timezone'
 import type { Match, MatchStatus } from '@/lib/types'
+import { RED_CARD_COLUMNS, RED_CARD_JOIN, withRedCards } from './event-queries'
 
 /**
  * Reads for the personalised home feed (PRD MAT-1).
@@ -160,11 +161,11 @@ export async function getMatchesForLocalDay(date: string, tz: string): Promise<M
   )
   const db = getDb()
   const result = await db.execute<MatchJoinRow>(
-    sql`select ${MATCH_COLUMNS} ${MATCH_FROM}
+    sql`select ${MATCH_COLUMNS}, ${RED_CARD_COLUMNS} ${MATCH_FROM} ${RED_CARD_JOIN}
         where m.match_date in (${dates})
           and m.utc_date >= ${start.toISOString()}::timestamptz
           and m.utc_date <  ${end.toISOString()}::timestamptz
         order by m.utc_date asc, m.id asc`
   )
-  return rowsOf<MatchJoinRow>(result).map(toMatch)
+  return rowsOf<MatchJoinRow>(result).map((r) => withRedCards(toMatch(r), r))
 }

@@ -1,7 +1,22 @@
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
-import { matchEvents, providerMap } from '@/lib/db/schema'
+import { matchEvents } from '@/lib/db/schema'
 import type { SyncResult } from '@/lib/server/ingest'
+import {
+  chunk,
+  describeError,
+  readMarker,
+  recordState,
+  rowsOf,
+  writeMarker,
+} from '@/lib/server/sync/sync-state'
+import {
+  competitionTeams,
+  insertMappings,
+  loadMappings,
+  ourMatches,
+  type OurFixture,
+} from '@/lib/server/sync/provider-map'
 import {
   LEAGUE_TO_COMPETITION,
   OPENLIGADB_LEAGUES,
@@ -16,7 +31,6 @@ import {
   parseGoalMinute,
   releaseLeagueSlot,
   seasonFor,
-  type CandidateTeam,
   type GoalEventType,
   type OldbGoal,
   type OldbMatch,
@@ -65,15 +79,8 @@ export function eventsResource(league: OpenLigaDbLeague): string {
  * Pure planning (unit-tested)
  * ------------------------------------------------------------------ */
 
-export interface OurMatch {
-  id: number
-  homeTeamId: number
-  awayTeamId: number
-  utcDate: Date
-  status: string
-  homeScoreFt: number | null
-  awayScoreFt: number | null
-}
+/** One of our fixtures, as the matcher sees it. */
+export type OurMatch = OurFixture
 
 /**
  * Finds our fixture for an upstream match whose teams are already mapped.
@@ -85,10 +92,11 @@ export function matchFixture(
   kickoff: Date,
   team1Id: number,
   team2Id: number,
-  ours: OurMatch[]
+  ours: Pick<OurMatch, 'id' | 'homeTeamId' | 'awayTeamId' | 'utcDate'>[],
+  toleranceMs = KICKOFF_TOLERANCE_MS
 ): { id: number; swapped: boolean } | { id: null; reason: 'none' | 'ambiguous' } {
   const near = ours.filter(
-    (m) => Math.abs(m.utcDate.getTime() - kickoff.getTime()) <= KICKOFF_TOLERANCE_MS
+    (m) => Math.abs(m.utcDate.getTime() - kickoff.getTime()) <= toleranceMs
   )
   const straight = near.filter((m) => m.homeTeamId === team1Id && m.awayTeamId === team2Id)
   if (straight.length === 1) return { id: straight[0].id, swapped: false }
@@ -224,140 +232,6 @@ export function findScoreMismatch(
  * Database helpers
  * ------------------------------------------------------------------ */
 
-type Row = Record<string, unknown>
-function rowsOf(result: unknown): Row[] {
-  return ((result as { rows?: Row[] }).rows ?? (result as Row[])) as Row[]
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
-  return out
-}
-
-/**
- * Our sync bookkeeping for `events:<CODE>`, mirroring ingest's run() (which
- * is private to ingest.ts), so the admin page reads this resource like any
- * other.
- */
-async function recordState(
-  resource: string,
-  outcome: { kind: 'attempt' } | { kind: 'success'; rows: number } | { kind: 'failure'; error: string }
-): Promise<void> {
-  const db = getDb()
-  if (outcome.kind === 'attempt') {
-    await db.execute(sql`
-      insert into sync_state (resource, last_attempt_at) values (${resource}, now())
-      on conflict (resource) do update set last_attempt_at = now()`)
-  } else if (outcome.kind === 'success') {
-    await db.execute(sql`
-      insert into sync_state (resource, last_attempt_at, last_success_at, rows_written, consecutive_failures)
-      values (${resource}, now(), now(), ${outcome.rows}, 0)
-      on conflict (resource) do update set
-        last_attempt_at = now(), last_success_at = now(), rows_written = excluded.rows_written,
-        last_error = null, consecutive_failures = 0`)
-  } else {
-    await db.execute(sql`
-      insert into sync_state (resource, last_attempt_at, last_error, consecutive_failures)
-      values (${resource}, now(), ${outcome.error.slice(0, 500)}, 1)
-      on conflict (resource) do update set
-        last_attempt_at = now(), last_error = excluded.last_error,
-        consecutive_failures = sync_state.consecutive_failures + 1`)
-  }
-}
-
-/** Reads a marker row: when it last succeeded and the integer it carries. */
-async function readMarker(resource: string): Promise<{ at: Date | null; value: number } | null> {
-  const row = rowsOf(
-    await getDb().execute(sql`
-      select last_success_at as "at", rows_written as "value" from sync_state where resource = ${resource}`)
-  )[0]
-  if (!row) return null
-  return { at: row.at ? new Date(row.at as string) : null, value: Number(row.value ?? 0) }
-}
-
-/**
- * Writes a marker row. Markers reuse sync_state's columns (the schema is not
- * ours to change): `last_success_at` holds the time - or, for change
- * markers, upstream's change date - and `rows_written` a small integer such
- * as the current matchday.
- */
-async function writeMarker(resource: string, at: Date, value: number, note: string | null = null) {
-  await getDb().execute(sql`
-    insert into sync_state (resource, last_attempt_at, last_success_at, rows_written, last_error, consecutive_failures)
-    values (${resource}, now(), ${at.toISOString()}::timestamptz, ${value}, ${note}, 0)
-    on conflict (resource) do update set
-      last_attempt_at = now(), last_success_at = excluded.last_success_at,
-      rows_written = excluded.rows_written, last_error = excluded.last_error`)
-}
-
-async function loadMappings(entityType: 'team' | 'match'): Promise<Map<string, number>> {
-  const rows = await getDb()
-    .select({ providerId: providerMap.providerId, ourKey: providerMap.ourKey })
-    .from(providerMap)
-    .where(and(eq(providerMap.provider, PROVIDER), eq(providerMap.entityType, entityType)))
-  return new Map(rows.map((r) => [r.providerId, Number(r.ourKey)]))
-}
-
-async function insertMappings(entityType: 'team' | 'match', pairs: [string, number][]) {
-  for (const part of chunk(pairs, BATCH)) {
-    await getDb()
-      .insert(providerMap)
-      .values(
-        part.map(([providerId, ourKey]) => ({
-          provider: PROVIDER,
-          entityType,
-          providerId,
-          ourKey: String(ourKey),
-        }))
-      )
-      // Either key already taken means someone mapped it first (two racing
-      // syncs); the reload that follows shows what won.
-      .onConflictDoNothing()
-  }
-}
-
-async function competitionTeams(code: string): Promise<CandidateTeam[]> {
-  const rows = rowsOf(
-    await getDb().execute(sql`
-      select distinct t.id, t.name, t.short_name as "shortName"
-      from teams t
-      join matches m on t.id in (m.home_team_id, m.away_team_id)
-      where m.competition_code = ${code}`)
-  )
-  return rows.map((r) => ({
-    id: Number(r.id),
-    name: String(r.name),
-    shortName: (r.shortName as string | null) ?? null,
-  }))
-}
-
-async function ourMatches(code: string, from: Date, to: Date, ids: number[]): Promise<OurMatch[]> {
-  const idList = ids.length
-    ? sql`or id in (${sql.join(
-        ids.map((i) => sql`${i}`),
-        sql`, `
-      )})`
-    : sql``
-  const rows = rowsOf(
-    await getDb().execute(sql`
-      select id, home_team_id as "homeTeamId", away_team_id as "awayTeamId", utc_date as "utcDate",
-             status, home_score_ft as "homeScoreFt", away_score_ft as "awayScoreFt"
-      from matches
-      where competition_code = ${code}
-        and (utc_date between ${from.toISOString()}::timestamptz and ${to.toISOString()}::timestamptz ${idList})`)
-  )
-  return rows.map((r) => ({
-    id: Number(r.id),
-    homeTeamId: Number(r.homeTeamId),
-    awayTeamId: Number(r.awayTeamId),
-    utcDate: new Date(r.utcDate as string),
-    status: String(r.status),
-    homeScoreFt: r.homeScoreFt == null ? null : Number(r.homeScoreFt),
-    awayScoreFt: r.awayScoreFt == null ? null : Number(r.awayScoreFt),
-  }))
-}
-
 async function isActive(code: string, now: Date): Promise<boolean> {
   const from = new Date(now.getTime() - ACTIVE_AFTER_KICKOFF_MS).toISOString()
   const to = new Date(now.getTime() + ACTIVE_BEFORE_KICKOFF_MS).toISOString()
@@ -411,7 +285,7 @@ async function ingest(
   if (payload.matches.length === 0) return stats
 
   // 1. Teams.
-  let teamMap = await loadMappings('team')
+  let teamMap = await loadMappings(PROVIDER, 'team')
   const upstreamTeams = new Map(
     payload.matches.flatMap((m) => [m.team1, m.team2]).map((t) => [String(t.teamId), t])
   )
@@ -431,13 +305,13 @@ async function ingest(
       }
     }
     if (fresh.length) {
-      await insertMappings('team', fresh)
-      teamMap = await loadMappings('team')
+      await insertMappings(PROVIDER, 'team', fresh)
+      teamMap = await loadMappings(PROVIDER, 'team')
     }
   }
 
   // 2. Matches.
-  let matchMap = await loadMappings('match')
+  let matchMap = await loadMappings(PROVIDER, 'match')
   const kickoffs = payload.matches
     .map((m) => new Date(m.matchDateTimeUTC).getTime())
     .filter(Number.isFinite)
@@ -480,8 +354,8 @@ async function ingest(
     takenMatches.add(hit.id)
   }
   if (freshMatches.length) {
-    await insertMappings('match', freshMatches)
-    matchMap = await loadMappings('match')
+    await insertMappings(PROVIDER, 'match', freshMatches)
+    matchMap = await loadMappings(PROVIDER, 'match')
   }
 
   // 3. Goals.
@@ -693,12 +567,4 @@ export async function syncOpenLigaDbEvents(
     await recordState(resource, { kind: 'failure', error: message }).catch(() => undefined)
     return { resource, ok: false, rows: 0, error: message }
   }
-}
-
-/** Driver errors carry the useful part on `cause` and the whole SQL in the message. */
-function describeError(err: unknown): string {
-  const cause = (err as { cause?: unknown })?.cause
-  if (cause instanceof Error && cause.message) return cause.message
-  if (err instanceof Error) return err.message.split('\nparams:')[0].slice(0, 300)
-  return String(err)
 }

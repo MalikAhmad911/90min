@@ -3,6 +3,7 @@ import { isDatabaseConfigured } from '@/lib/db'
 import { getHeadToHead, getMatchById, getMatchesByTeam, getScorers } from '@/lib/db/queries'
 import { getStandingsView } from '@/lib/db/standings-view'
 import { getMatchVenue, getTeamById, type TeamRow } from '@/lib/db/seo-queries'
+import { withMatchEvents } from '@/lib/db/event-queries'
 import type { Match, Scorer, StandingsTable } from '@/lib/types'
 import { parseEntityId } from './ids'
 
@@ -46,8 +47,14 @@ export const loadMatchPage = cache(async (rawId: string): Promise<Loaded<MatchPa
     const match = await getMatchById(id)
     if (!match) return { status: 'not-found' }
     // Same limit as /api/match/[id], so the first poll does not reshuffle the H2H tab.
-    const [headToHead, venue] = await Promise.all([getHeadToHead(id, 10), getMatchVenue(id)])
-    return { status: 'ok', data: { match, headToHead, venue } }
+    const [headToHead, venue, enriched] = await Promise.all([
+      getHeadToHead(id, 10),
+      getMatchVenue(id),
+      // Events, lineups and stats are an enrichment: without them the page
+      // still renders, and the client fetch fills them in.
+      withMatchEvents(match).catch(() => match),
+    ])
+    return { status: 'ok', data: { match: enriched, headToHead, venue } }
   } catch (err) {
     return unavailable(`match ${id}`, err)
   }

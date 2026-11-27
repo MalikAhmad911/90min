@@ -2,6 +2,7 @@ import { eq, and, asc, desc, sql, gte, lte } from 'drizzle-orm'
 import { getDb } from './index'
 import { competitions, teams, matches, standings, scorers, syncState } from './schema'
 import type { Match, StandingsTable, Scorer, MatchStatus } from '@/lib/types'
+import { RED_CARD_COLUMNS, RED_CARD_JOIN, withRedCards } from './event-queries'
 
 /**
  * Every read the app makes.
@@ -114,15 +115,18 @@ const MATCH_FROM = sql`
   join teams a on a.id = m.away_team_id
 `
 
-/** Every match on a UTC date, in kickoff order. Hits matches_match_date_idx. */
+/**
+ * Every match on a UTC date, in kickoff order, with red-card counts where a
+ * provider reported cards (MAT-4). Hits matches_match_date_idx.
+ */
 export async function getMatchesByDate(date: string): Promise<Match[]> {
   const db = getDb()
   const rows = await db.execute<MatchJoinRow>(
-    sql`select ${MATCH_COLUMNS} ${MATCH_FROM}
+    sql`select ${MATCH_COLUMNS}, ${RED_CARD_COLUMNS} ${MATCH_FROM} ${RED_CARD_JOIN}
         where m.match_date = ${date}::date
         order by m.utc_date asc, m.id asc`
   )
-  return (rows.rows ?? (rows as unknown as MatchJoinRow[])).map(toMatch)
+  return (rows.rows ?? (rows as unknown as MatchJoinRow[])).map((r) => withRedCards(toMatch(r), r))
 }
 
 /** One match, or null. */

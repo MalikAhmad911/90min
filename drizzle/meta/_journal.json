@@ -29,6 +29,13 @@
       "when": 1795804425389,
       "tag": "0003_match_events",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795814728945,
+      "tag": "0004_match_details",
+      "breakpoints": true
     }
   ]
 }
