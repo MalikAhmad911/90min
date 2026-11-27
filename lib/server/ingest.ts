@@ -24,6 +24,7 @@ import {
   ENRICH_RESOURCE,
 } from '@/lib/server/sync/players'
 import { syncOpenLigaDbEvents } from '@/lib/server/sync/openligadb'
+import { syncHighlightly } from '@/lib/server/sync/highlightly'
 
 /**
  * Writes provider data into Postgres.
@@ -522,6 +523,15 @@ export function isBackingOff(
   return now - new Date(lastAttemptAt).getTime() < waitMs
 }
 
+/** Lower runs first: what users see on the scores page comes before enrichment. */
+export function resourcePriority(resource: string): number {
+  if (resource === 'live-window') return 0
+  if (resource.startsWith('season:')) return 1
+  if (resource.startsWith('standings:')) return 2
+  if (resource.startsWith('scorers:')) return 3
+  return 4
+}
+
 export async function staleResources(limit = 4): Promise<string[]> {
   const db = getDb()
   const rows = await db
@@ -535,13 +545,13 @@ export async function staleResources(limit = 4): Promise<string[]> {
 
   const seen = new Map(rows.map((r) => [r.resource, r]))
   const now = Date.now()
-  const candidates: { resource: string; age: number }[] = []
+  const candidates: { resource: string; age: number; priority: number }[] = []
 
   const add = (resource: string, maxAgeMs: number) => {
     const row = seen.get(resource)
     if (row && isBackingOff(row.failures, row.lastAttemptAt, now)) return
     const age = row?.lastSuccessAt ? now - new Date(row.lastSuccessAt).getTime() : Infinity
-    if (age > maxAgeMs) candidates.push({ resource, age })
+    if (age > maxAgeMs) candidates.push({ resource, age, priority: resourcePriority(resource) })
   }
 
   add('live-window', 60_000)
@@ -556,8 +566,11 @@ export async function staleResources(limit = 4): Promise<string[]> {
   // One request per club, refreshed weekly; Premier League clubs first.
   for (const r of await squadResources({ competition: 'PL' })) add(r, 7 * 24 * 60 * 60_000)
 
-  // Stalest first, so nothing is starved.
-  candidates.sort((a, b) => b.age - a.age)
+  // Scores before everything else, then stalest first within a class. Age
+  // alone is not enough: ~250 never-synced squad resources all have an
+  // infinite age and used to take every slot, so match results went a week
+  // without a season sync.
+  candidates.sort((a, b) => a.priority - b.priority || b.age - a.age)
   return candidates.slice(0, limit).map((c) => c.resource)
 }
 
@@ -573,6 +586,7 @@ export async function syncResource(resource: string): Promise<SyncResult> {
   await ensureCompetitions()
 
   if (resource === 'live-window') return syncLiveWindow()
+  if (resource === 'highlightly') return syncHighlightly({ force: true })
 
   const squadTeam = parseSquadResource(resource)
   if (squadTeam) return run(resource, () => loadSquad(squadTeam))
@@ -603,5 +617,8 @@ export async function runSync(limit = 4): Promise<SyncResult[]> {
   // upstream request at all unless a match is live or a refresh is due.
   results.push(await syncOpenLigaDbEvents('bl1'))
   results.push(await syncOpenLigaDbEvents('ucl'))
+  // Lineups, statistics and the event timeline; budgeted to 90 requests a day
+  // and at most one pass every 10 minutes.
+  results.push(await syncHighlightly())
   return results
 }

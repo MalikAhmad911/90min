@@ -52,6 +52,23 @@ function StatusLabel({ match }: { match: Match }) {
   return null
 }
 
+/** Red-card marker beside a team name (MAT-4); nothing when the side has none. */
+function RedCards({ count }: { count: number | undefined }) {
+  if (!count) return null
+  const label = count === 1 ? '1 red card' : `${count} red cards`
+  return (
+    <span className="inline-flex items-center gap-0.5 shrink-0" title={label}>
+      <span aria-hidden="true" className="w-[7px] h-[10px] rounded-[1px] bg-live-red" />
+      {count > 1 && (
+        <span aria-hidden="true" className="text-[10px] font-bold text-live-red tabular-nums">
+          {count}
+        </span>
+      )}
+      <span className="sr-only">{label}</span>
+    </span>
+  )
+}
+
 function CenterDisplay({ match, timeZone }: { match: Match; timeZone?: string | null }) {
   const isPaused = match.status === 'PAUSED'
   const live = isLive(match.status) && !isPaused
@@ -115,6 +132,7 @@ export function MatchCard({ match, timeZone, showCompetition = false }: MatchCar
 
       {/* Home team: Name [crest] — right-aligned */}
       <div className="flex-1 flex items-center justify-end gap-1.5 min-w-0">
+        <RedCards count={match.redCards?.home} />
         <span className={`text-[13px] font-medium truncate text-right ${homeDim ? 'text-content-muted' : 'text-content-primary'}`}>
           {match.homeTeam.shortName || match.homeTeam.name}
         </span>
@@ -132,6 +150,7 @@ export function MatchCard({ match, timeZone, showCompetition = false }: MatchCar
         <span className={`text-[13px] font-medium truncate ${awayDim ? 'text-content-muted' : 'text-content-primary'}`}>
           {match.awayTeam.shortName || match.awayTeam.name}
         </span>
+        <RedCards count={match.redCards?.away} />
       </div>
 
       {showCompetition && (

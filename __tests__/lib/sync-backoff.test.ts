@@ -24,3 +24,14 @@ describe('isBackingOff', () => {
     expect(isBackingOff(190, ago(6 * 60 * 60_000 + 1000), now)).toBe(false)
   })
 })
+
+import { resourcePriority } from '@/lib/server/ingest'
+
+describe('resourcePriority', () => {
+  it('puts scores ahead of enrichment', () => {
+    const order = ['squad:57', 'players:enrich', 'scorers:PL', 'standings:PL', 'season:PL', 'live-window']
+    expect([...order].sort((a, b) => resourcePriority(a) - resourcePriority(b))).toEqual([
+      'live-window', 'season:PL', 'standings:PL', 'scorers:PL', 'squad:57', 'players:enrich',
+    ])
+  })
+})

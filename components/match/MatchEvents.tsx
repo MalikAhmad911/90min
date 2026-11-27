@@ -1,6 +1,7 @@
-import { ArrowRightLeft, Square } from 'lucide-react'
-import type { MatchDetail } from '@/lib/types'
+import { ArrowRightLeft, CircleX, MonitorPlay, Square } from 'lucide-react'
+import type { MatchDetail, MatchTimelineEvent } from '@/lib/types'
 import type { MatchEventsExtras } from '@/lib/db/event-queries'
+import { DetailsAttribution } from './DetailsAttribution'
 
 type Side = 'home' | 'away'
 
@@ -11,7 +12,7 @@ export interface TimelineEvent {
   minute: number
   injuryTime: number | null
   side: Side
-  kind: 'goal' | 'card' | 'substitution'
+  kind: 'goal' | 'card' | 'substitution' | 'missed_penalty' | 'var'
   primary: string
   secondary?: string | null
   detail?: string | null
@@ -35,8 +36,46 @@ export function formatMinute(minute: number, injuryTime: number | null | undefin
   return injuryTime ? `${minute}+${injuryTime}′` : `${minute}′`
 }
 
-/** Flattens goals, bookings and substitutions into one ordered timeline. */
+const GOAL_CLIENT_TYPE: Record<string, string> = { GOAL: 'REGULAR', PENALTY_GOAL: 'PENALTY', OWN_GOAL: 'OWN' }
+const CARD_DETAIL: Record<string, string> = { YELLOW_CARD: 'YELLOW', SECOND_YELLOW: 'YELLOW_RED', RED_CARD: 'RED' }
+
+/** One provider event (already in our home/away terms) as a timeline row. */
+export function fromProviderEvent(e: MatchTimelineEvent): TimelineEvent {
+  const base = { minute: e.minute ?? 0, injuryTime: e.addedTime, side: e.side ?? 'home' } as const
+  if (e.type in GOAL_CLIENT_TYPE) {
+    return {
+      ...base,
+      kind: 'goal',
+      primary: e.player ?? 'Unknown scorer',
+      secondary: e.related,
+      detail: goalLabel(GOAL_CLIENT_TYPE[e.type]),
+      cancelled: e.cancelled,
+    }
+  }
+  if (e.type in CARD_DETAIL) {
+    return { ...base, kind: 'card', primary: e.player ?? 'Unknown player', detail: CARD_DETAIL[e.type] }
+  }
+  if (e.type === 'SUBSTITUTION') {
+    return { ...base, kind: 'substitution', primary: e.player ?? 'Unknown player', secondary: e.related }
+  }
+  if (e.type === 'MISSED_PENALTY') {
+    return { ...base, kind: 'missed_penalty', primary: e.player ?? 'Unknown player', detail: 'missed penalty' }
+  }
+  return { ...base, kind: 'var', primary: e.detail ?? 'VAR review', secondary: e.player }
+}
+
+/**
+ * One ordered timeline: the provider's full event list when there is one
+ * (Highlightly), otherwise goals, bookings and substitutions from the match.
+ */
 export function buildTimeline(match: MatchWithEvents | MatchDetail): TimelineEvent[] {
+  const provided = (match as MatchWithEvents).events
+  if (provided?.length) {
+    return provided
+      .map(fromProviderEvent)
+      .sort((a, b) => a.minute - b.minute || (a.injuryTime ?? 0) - (b.injuryTime ?? 0))
+  }
+
   const events: TimelineEvent[] = []
 
   for (const g of (match.goals ?? []) as (NonNullable<MatchDetail['goals']>[number] & {
@@ -91,7 +130,21 @@ function EventIcon({ event }: { event: TimelineEvent }) {
   if (event.kind === 'substitution') {
     return <ArrowRightLeft size={12} className="text-accent-green" aria-hidden="true" />
   }
-  const red = event.detail === 'RED' || event.detail === 'YELLOW_RED'
+  if (event.kind === 'missed_penalty') {
+    return <CircleX size={12} className="text-live-red" aria-hidden="true" />
+  }
+  if (event.kind === 'var') {
+    return <MonitorPlay size={12} className="text-content-secondary" aria-hidden="true" />
+  }
+  if (event.detail === 'YELLOW_RED') {
+    return (
+      <span className="relative inline-block w-[13px] h-[12px]" aria-hidden="true">
+        <Square size={10} className="absolute left-0 top-0 fill-yellow-400 text-yellow-400" />
+        <Square size={10} className="absolute left-[3px] top-[2px] fill-live-red text-live-red" />
+      </span>
+    )
+  }
+  const red = event.detail === 'RED'
   return (
     <Square
       size={11}
@@ -111,7 +164,12 @@ function describe(event: TimelineEvent, minute: string, teamName: string): strin
   if (event.kind === 'substitution') {
     return `Substitution, ${teamName}, ${minute}: ${event.primary} on for ${event.secondary ?? 'unknown'}`
   }
-  return `${event.detail === 'RED' || event.detail === 'YELLOW_RED' ? 'Red' : 'Yellow'} card, ${event.primary}, ${teamName}, ${minute}`
+  if (event.kind === 'missed_penalty') return `Missed penalty, ${event.primary}, ${teamName}, ${minute}`
+  if (event.kind === 'var') {
+    return `${event.primary}${event.secondary ? `, ${event.secondary}` : ''}, ${teamName}, ${minute}`
+  }
+  const card = event.detail === 'YELLOW_RED' ? 'Second yellow card' : event.detail === 'RED' ? 'Red card' : 'Yellow card'
+  return `${card}, ${event.primary}, ${teamName}, ${minute}`
 }
 
 function EventRow({ event, teamName }: { event: TimelineEvent; teamName: string }) {
@@ -124,7 +182,16 @@ function EventRow({ event, teamName }: { event: TimelineEvent; teamName: string 
       <p className={`text-[13px] font-medium truncate ${struck}`}>{event.primary}</p>
       {event.secondary && (
         <p className="text-[11px] text-content-muted truncate">
-          {event.kind === 'substitution' ? `out: ${event.secondary}` : `assist: ${event.secondary}`}
+          {event.kind === 'substitution'
+            ? `out: ${event.secondary}`
+            : event.kind === 'var'
+              ? event.secondary
+              : `assist: ${event.secondary}`}
+        </p>
+      )}
+      {(event.kind === 'missed_penalty' || (event.kind === 'card' && event.detail === 'YELLOW_RED')) && (
+        <p className="text-[11px] text-content-muted truncate">
+          {event.kind === 'missed_penalty' ? 'missed penalty' : 'second yellow'}
         </p>
       )}
       {event.kind === 'goal' && (event.detail || event.cancelled) && (
@@ -219,6 +286,7 @@ export function MatchEvents({ match }: { match: MatchWithEvents | MatchDetail })
       <div>
         <EmptyState match={m} />
         {attribution && <EventsAttribution attribution={attribution} />}
+        <DetailsAttribution source={m.detailsSource} />
       </div>
     )
   }
@@ -239,6 +307,7 @@ export function MatchEvents({ match }: { match: MatchWithEvents | MatchDetail })
         </p>
       )}
       {attribution && <EventsAttribution attribution={attribution} />}
+      <DetailsAttribution source={m.detailsSource} />
     </div>
   )
 }

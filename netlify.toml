@@ -23,8 +23,8 @@
 # Keeps the database warm without anyone having to visit the site.
 #
 # The app also refreshes itself on read, but that only helps while someone is
-# looking. This is the floor: once an hour the stalest resources get pulled
+# looking. This is the floor: every ten minutes the stalest resources get pulled
 # even if the site has had no traffic at all. Each run refreshes only a few
 # resources, so it can never exhaust the provider's ten-requests-a-minute quota.
 [functions."scheduled-sync"]
-  schedule = "@hourly"
+  schedule = "*/10 * * * *"
