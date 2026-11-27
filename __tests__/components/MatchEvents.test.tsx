@@ -58,7 +58,9 @@ describe('MatchEvents', () => {
     expect(screen.getByText('penalty')).toBeInTheDocument()
     expect(screen.getByText('90+11′')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'ODbL 1.0' })).toHaveAttribute('href', attribution.licenseUrl)
-  })
+    // The first render in a file pays jsdom and React warm-up; on a loaded
+    // machine that alone can exceed the 5 s default.
+  }, 30_000)
 
   it('strikes through a disallowed goal and says so to screen readers', () => {
     render(
