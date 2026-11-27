@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, MapPin, Users } from 'lucide-react'
 import { useMatchDetail } from '@/hooks/useMatches'
 import { isLive } from '@/lib/utils'
-import { kickoffTime, shortDate, useIsClient } from '@/lib/seo/client-time'
+import { useKickoffTime } from '@/hooks/useKickoffTime'
 import { resolveCompetition } from '@/lib/competitions'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { MatchEvents } from './MatchEvents'
@@ -25,7 +25,7 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 function StatusPill({ match }: { match: MatchDetail }) {
-  const local = useIsClient()
+  const kickoff = useKickoffTime()
 
   if (isLive(match.status)) {
     const label = match.status === 'PAUSED' ? 'HT' : `${match.minute ?? '?'}'`
@@ -55,14 +55,14 @@ function StatusPill({ match }: { match: MatchDetail }) {
 
   return (
     <span className="px-2.5 py-1 rounded-full bg-bg-elevated text-content-secondary text-[11px] font-semibold">
-      {kickoffTime(match.utcDate, local)}
+      {kickoff.time(match.utcDate)}
     </span>
   )
 }
 
 function H2HRow({ match }: { match: Match }) {
-  const local = useIsClient()
-  const date = shortDate(match.utcDate, local, { day: 'numeric', month: 'short', year: 'numeric' })
+  const kickoff = useKickoffTime()
+  const date = kickoff.day(match.utcDate, { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
     <Link
@@ -93,7 +93,7 @@ export function MatchDetailView({
 }) {
   const { match, headToHead, error, isLoading } = useMatchDetail(id, initialData)
   const [tab, setTab] = useState<Tab>('summary')
-  const local = useIsClient()
+  const kickoff = useKickoffTime()
 
   if (isLoading && !match) {
     return (
@@ -196,7 +196,7 @@ export function MatchDetailView({
               </>
             ) : (
               <p className="text-2xl font-black text-content-secondary tabular-nums">
-                {kickoffTime(match.utcDate, local)}
+                {kickoff.time(match.utcDate)}
               </p>
             )}
           </div>

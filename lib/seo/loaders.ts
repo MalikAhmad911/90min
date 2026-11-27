@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { isDatabaseConfigured } from '@/lib/db'
-import { getHeadToHead, getMatchById, getMatchesByTeam, getScorers, getStandings } from '@/lib/db/queries'
+import { getHeadToHead, getMatchById, getMatchesByTeam, getScorers } from '@/lib/db/queries'
+import { getStandingsView } from '@/lib/db/standings-view'
 import { getMatchVenue, getTeamById, type TeamRow } from '@/lib/db/seo-queries'
 import type { Match, Scorer, StandingsTable } from '@/lib/types'
 import { parseEntityId } from './ids'
@@ -83,8 +84,9 @@ export const loadCompetitionPage = cache(
   async (code: string): Promise<Loaded<CompetitionPageData>> => {
     if (!isDatabaseConfigured()) return { status: 'unavailable' }
     try {
-      // Same limit as the LeagueView's scorers request.
-      const [standings, scorers] = await Promise.all([getStandings(code), getScorers(code, 20)])
+      // Same limit as the LeagueView's scorers request; the same (form-filled)
+      // standings as /api/standings, so the first fetch does not reshuffle.
+      const [standings, scorers] = await Promise.all([getStandingsView(code, 'total'), getScorers(code, 20)])
       return { status: 'ok', data: { standings, scorers } }
     } catch (err) {
       return unavailable(`competition ${code}`, err)

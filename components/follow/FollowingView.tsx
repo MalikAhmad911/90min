@@ -7,11 +7,13 @@ import { usePreferredTimeZone } from '@/hooks/useDayMatches'
 import { FollowButton } from './FollowButton'
 import { Crest } from '@/components/ui/Crest'
 import { TeamCrest } from '@/components/ui/TeamCrest'
-import { formatKickoffTimeIn, isLive } from '@/lib/utils'
+import { isLive } from '@/lib/utils'
+import { useKickoffTime } from '@/hooks/useKickoffTime'
 import type { Match } from '@/lib/types'
 
 /** "Sat 29 Nov, 15:00 vs Chelsea" - or "LIVE vs Chelsea" while in play. */
 function NextMatch({ match, teamId, timeZone }: { match: Match | null; teamId?: number; timeZone: string | null }) {
+  const kickoff = useKickoffTime(timeZone)
   if (!match) return <span className="text-[12px] text-content-muted">No upcoming match</span>
 
   const opponent =
@@ -20,17 +22,7 @@ function NextMatch({ match, teamId, timeZone }: { match: Match | null; teamId?: 
       : match.homeTeam.id === teamId
         ? `vs ${match.awayTeam.shortName}`
         : `at ${match.homeTeam.shortName}`
-  let when: string
-  try {
-    when = new Date(match.utcDate).toLocaleDateString('en-GB', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      ...(timeZone ? { timeZone } : {}),
-    })
-  } catch {
-    when = new Date(match.utcDate).toLocaleDateString('en-GB')
-  }
+  const when = kickoff.day(match.utcDate, { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
     <Link
@@ -41,7 +33,7 @@ function NextMatch({ match, teamId, timeZone }: { match: Match | null; teamId?: 
         <span className="font-bold text-live-red">LIVE </span>
       ) : (
         <span className="tabular-nums">
-          {when}, {formatKickoffTimeIn(match.utcDate, timeZone)}{' '}
+          {when}, {kickoff.time(match.utcDate)}{' '}
         </span>
       )}
       {opponent}

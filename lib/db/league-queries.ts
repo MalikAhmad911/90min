@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from './index'
 import { FREE_COMPETITION_CODES } from '@/lib/competitions'
+import { STANDINGS_VIEWS, type FinishedMatch } from '@/lib/standings-splits'
 
 /**
  * League-depth reads: fixtures by round and stat leaders.
@@ -23,6 +24,9 @@ export const leagueCodeSchema = z
 export const fixturesQuerySchema = z.object({
   matchday: z.coerce.number().int().min(1).max(60).optional(),
 })
+
+/** `?view=` on /api/standings: absent means the overall table. */
+export const standingsViewSchema = z.enum(STANDINGS_VIEWS).default('total')
 
 export const leadersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
@@ -282,4 +286,87 @@ export async function getLeaders(code: string, limit = 10): Promise<Leaders> {
       .sort(rank)
       .slice(0, limit),
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Finished matches for form and home/away tables (PRD LG-1)
+ * ------------------------------------------------------------------ */
+
+interface FinishedMatchRow {
+  id: number
+  utcDate: Date | string
+  stage: string | null
+  homeId: number
+  homeName: string
+  homeShort: string | null
+  homeTla: string | null
+  homeCrest: string | null
+  awayId: number
+  awayName: string
+  awayShort: string | null
+  awayTla: string | null
+  awayCrest: string | null
+  homeGoals: number
+  awayGoals: number
+}
+
+/**
+ * Every finished match of the season the stored standings belong to
+ * (competitions.current_season_id), oldest first, in one query.
+ *
+ * Some fixture feeds arrive without a season id, so a match with a null
+ * `season_id` still counts when it falls inside that season's dates (a day
+ * of slack either side, since the dates are calendar days). Stage and group
+ * filtering happen in lib/standings-splits.ts against each stored table.
+ */
+export async function getFinishedLeagueMatches(code: string): Promise<FinishedMatch[]> {
+  const db = getDb()
+  const rows = rowsOf<FinishedMatchRow>(
+    await db.execute(sql`
+      select m.id, m.utc_date as "utcDate", m.stage,
+             h.id as "homeId", h.name as "homeName", h.short_name as "homeShort", h.tla as "homeTla", h.crest as "homeCrest",
+             a.id as "awayId", a.name as "awayName", a.short_name as "awayShort", a.tla as "awayTla", a.crest as "awayCrest",
+             m.home_score_ft as "homeGoals", m.away_score_ft as "awayGoals"
+      from matches m
+      join competitions c on c.code = m.competition_code
+      left join seasons s on s.id = c.current_season_id
+      join teams h on h.id = m.home_team_id
+      join teams a on a.id = m.away_team_id
+      where m.competition_code = ${code}
+        and c.current_season_id is not null
+        and m.status in ('FINISHED', 'AWARDED')
+        and m.home_score_ft is not null
+        and m.away_score_ft is not null
+        and (
+          m.season_id = c.current_season_id
+          or (
+            m.season_id is null
+            and s.start_date is not null
+            and m.match_date between s.start_date - 1 and coalesce(s.end_date, current_date) + 1
+          )
+        )
+      order by m.utc_date asc, m.id asc`)
+  )
+
+  return rows.map((r) => ({
+    id: Number(r.id),
+    utcDate: new Date(r.utcDate).toISOString(),
+    stage: r.stage,
+    homeTeam: {
+      id: Number(r.homeId),
+      name: r.homeName,
+      shortName: r.homeShort ?? r.homeName,
+      tla: r.homeTla ?? '',
+      crest: r.homeCrest ?? '',
+    },
+    awayTeam: {
+      id: Number(r.awayId),
+      name: r.awayName,
+      shortName: r.awayShort ?? r.awayName,
+      tla: r.awayTla ?? '',
+      crest: r.awayCrest ?? '',
+    },
+    homeGoals: Number(r.homeGoals),
+    awayGoals: Number(r.awayGoals),
+  }))
 }

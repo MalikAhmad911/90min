@@ -60,6 +60,17 @@ export function resolveLiteMode(preference: LiteModePreference, slowNetwork: boo
   return preference === 'on' || (preference === 'auto' && slowNetwork)
 }
 
+/** How much slower SWR polls in Lite mode. */
+export const LITE_POLL_FACTOR = 2
+
+/**
+ * A polling interval for the current mode: Lite mode polls half as often.
+ * 0 means "do not poll" and stays 0.
+ */
+export function litePollInterval(ms: number, lite: boolean): number {
+  return lite && ms > 0 ? ms * LITE_POLL_FACTOR : ms
+}
+
 export interface LiteModeState {
   /** Hide images and crests when true. */
   enabled: boolean

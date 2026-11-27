@@ -43,6 +43,9 @@ export function getPreferredTimeZone(): string {
   return detectTimeZone()
 }
 
+/** Fired on `window` when this tab changes the zone (`storage` covers other tabs). */
+const TIMEZONE_CHANGE_EVENT = '90min:tz-change'
+
 /** Saves an explicit choice; null clears it so detection takes over again. */
 export function setPreferredTimeZone(tz: string | null): void {
   try {
@@ -50,6 +53,27 @@ export function setPreferredTimeZone(tz: string | null): void {
     else if (isValidTimeZone(tz)) window.localStorage.setItem(TIMEZONE_STORAGE_KEY, tz)
   } catch {
     // not persisted
+  }
+  try {
+    window.dispatchEvent(new Event(TIMEZONE_CHANGE_EVENT))
+  } catch {
+    // no window (server) - nothing is listening anyway
+  }
+}
+
+/**
+ * Calls `onChange` whenever the preferred zone may have changed, in this tab
+ * or another. Shaped for `useSyncExternalStore` with `getPreferredTimeZone`.
+ */
+export function subscribePreferredTimeZone(onChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === TIMEZONE_STORAGE_KEY) onChange()
+  }
+  window.addEventListener('storage', onStorage)
+  window.addEventListener(TIMEZONE_CHANGE_EVENT, onChange)
+  return () => {
+    window.removeEventListener('storage', onStorage)
+    window.removeEventListener(TIMEZONE_CHANGE_EVENT, onChange)
   }
 }
 

@@ -3,13 +3,15 @@
 import Image from 'next/image'
 import { useState } from 'react'
 import { playerInitials } from './player-utils'
+import { useLiteMode } from '@/hooks/useLiteMode'
 
 /**
  * A player's photo, or their initials.
  *
  * `src` is only ever a URL whose licence allows public display (see
  * lib/providers/thesportsdb-players.ts); the caller prints its credit. A
- * broken image falls back to initials rather than a broken-image icon.
+ * broken image falls back to initials rather than a broken-image icon, and
+ * so does Lite mode (after hydration - see components/ui/Crest.tsx).
  */
 export function PlayerPhoto({
   src,
@@ -21,8 +23,9 @@ export function PlayerPhoto({
   size?: number
 }) {
   const [failed, setFailed] = useState(false)
+  const { enabled: lite } = useLiteMode()
 
-  if (!src || failed) {
+  if (lite || !src || failed) {
     return (
       <span
         aria-hidden="true"

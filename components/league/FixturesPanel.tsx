@@ -8,6 +8,7 @@ import type { FixturesByRound, Fixture } from '@/lib/db/league-queries'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { KickoffTime } from '@/components/player/KickoffTime'
 import { isLive } from '@/lib/utils'
+import { litePollInterval, useLiteMode } from '@/hooks/useLiteMode'
 import type { MatchStatus } from '@/lib/types'
 
 const fetcher = async (url: string): Promise<FixturesByRound> => {
@@ -27,13 +28,14 @@ const fetcher = async (url: string): Promise<FixturesByRound> => {
 export function FixturesPanel({ code }: { code: string }) {
   // null = "whatever the current round is"; the API resolves it.
   const [selected, setSelected] = useState<number | null>(null)
+  const { enabled: lite } = useLiteMode()
   const url = `/api/league/${encodeURIComponent(code)}/fixtures${selected ? `?matchday=${selected}` : ''}`
 
   const { data, error, isLoading } = useSWR<FixturesByRound>(url, fetcher, {
     keepPreviousData: true,
     // Poll only while something in the shown round is live.
     refreshInterval: (latest) =>
-      latest?.fixtures?.some((f) => isLive(f.status as MatchStatus)) ? 30_000 : 0,
+      litePollInterval(latest?.fixtures?.some((f) => isLive(f.status as MatchStatus)) ? 30_000 : 0, lite),
   })
 
   const rounds = data?.matchdays ?? []

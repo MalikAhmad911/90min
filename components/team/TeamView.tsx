@@ -6,7 +6,8 @@ import { ArrowLeft, Calendar, Users, MapPin } from 'lucide-react'
 import { useTeam } from '@/hooks/useMatches'
 import { TeamCrest } from '@/components/ui/TeamCrest'
 import { isLive } from '@/lib/utils'
-import { kickoffTime, shortDate, useIsClient } from '@/lib/seo/client-time'
+import { useIsClient } from '@/lib/seo/client-time'
+import { useKickoffTime } from '@/hooks/useKickoffTime'
 import type { Match, TeamDetail } from '@/lib/types'
 import { SquadList } from '@/components/team/SquadList'
 import { FollowButton } from '@/components/follow/FollowButton'
@@ -18,9 +19,9 @@ function MatchRow({ match, teamId }: { match: Match; teamId: number }) {
   const opponent = isHome ? match.awayTeam : match.homeTeam
   const played = match.status !== 'SCHEDULED' && match.status !== 'TIMED'
   const live = isLive(match.status)
-  const local = useIsClient()
+  const kickoff = useKickoffTime()
 
-  const date = shortDate(match.utcDate, local, { day: 'numeric', month: 'short' })
+  const date = kickoff.day(match.utcDate, { day: 'numeric', month: 'short' })
 
   // Result letter from this team's point of view.
   let result: 'W' | 'D' | 'L' | null = null
@@ -59,7 +60,7 @@ function MatchRow({ match, teamId }: { match: Match; teamId: number }) {
         </span>
       ) : (
         <span className="shrink-0 text-[12px] text-content-secondary tabular-nums">
-          {kickoffTime(match.utcDate, local)}
+          {kickoff.time(match.utcDate)}
         </span>
       )}
       {result && (

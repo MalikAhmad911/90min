@@ -49,8 +49,8 @@ A small i18n layer with no library, built on Intl. English is the source diction
 2. **Urdu font.** Inter has no Urdu glyphs. Load `Noto Nastaliq Urdu` (or Noto Naskh Arabic, which is more compact) with `next/font/google` and apply it when `dir="rtl"`. Nastaliq needs a taller line-height (about 1.8 to 2).
 3. **`app/more/page.tsx`** wraps itself in a `LocaleProvider` with `lang` and `dir`, so it works before step 1. Those become redundant afterwards but do no harm. Relabel the nav links to `/more`: TopNav says "About" and BottomNav says "More". Use `nav.settings`.
 4. **Notifications.** Replace the `data-slot="notifications"` placeholder in `components/settings/SettingsView.tsx` with the notifications toggle.
-5. **Lite mode.** `const { enabled } = useLiteMode()` (`hooks/useLiteMode.ts`). `components/ui/Crest.tsx` should render its initials fallback when `enabled`, which covers every crest.
-6. **Time.** Replace `formatKickoffTime` (lib/utils.ts) with `useFormat(getPreferredTimeZone()).time(utcDate)`, so the kickoff uses the locale, the 12h/24h choice and the time zone.
+5. **Lite mode.** Done: `components/ui/Crest.tsx` (so every crest, TeamCrest included) and `PlayerPhoto` render their initials fallback when `useLiteMode().enabled`, and SWR polling runs at half rate (`litePollInterval`).
+6. **Time.** Done: kick-off times go through `useKickoffTime()` (`hooks/useKickoffTime.ts`), which applies the time zone and the 12h/24h choice with or without a `LocaleProvider`, and picks up the locale once the provider is mounted.
 
 ### Order of operations
 1. Merge the other branches first. The codemod rewrites their className strings, so run it last to avoid conflicts.
