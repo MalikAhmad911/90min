@@ -10,6 +10,7 @@ import {
   primaryKey,
   check,
   jsonb,
+  boolean,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -556,6 +557,75 @@ export const rateLimitEvents = pgTable(
   (t) => [index('rate_limit_events_lookup_idx').on(t.bucket, t.key, t.hitAt)]
 )
 
+/* ------------------------------------------------------------------ *
+ * Match events from providers (PRD section 10, MatchEvent)
+ * ------------------------------------------------------------------ */
+
+/** Event kinds a provider can report. */
+export const MATCH_EVENT_TYPES = [
+  'GOAL',
+  'OWN_GOAL',
+  'PENALTY_GOAL',
+  'MISSED_PENALTY',
+  'YELLOW_CARD',
+  'SECOND_YELLOW',
+  'RED_CARD',
+  'SUBSTITUTION',
+  'VAR',
+] as const
+
+/**
+ * What happened in a match, as a provider reported it - the timeline a user
+ * reads on the Facts tab.
+ *
+ * Distinct from match_signals: a signal is our own inference from two
+ * consecutive scorelines ("it went 1-0 to 2-0"), produced for every
+ * competition; an event is a provider's fact ("Wirtz, 90+11, penalty"),
+ * available only where some provider covers that competition.
+ *
+ * Unique on (provider, provider_event_id), so re-ingesting is a no-op.
+ * player_name is kept even when player_id cannot be resolved: an unmapped
+ * scorer is still worth showing.
+ */
+export const matchEvents = pgTable(
+  'match_events',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    matchId: integer('match_id')
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    providerEventId: text('provider_event_id').notNull(),
+    type: text('type').notNull(),
+    minute: integer('minute'),
+    /** Stoppage-time minutes, e.g. 11 for "90+11". */
+    addedTime: integer('added_time'),
+    teamId: integer('team_id').references(() => teams.id),
+    playerId: integer('player_id').references(() => players.id, { onDelete: 'set null' }),
+    playerName: text('player_name'),
+    /** Assist provider for a goal, or the player leaving for a substitution. */
+    relatedPlayerName: text('related_player_name'),
+    /** Running score after this event, for goals. */
+    scoreHome: integer('score_home'),
+    scoreAway: integer('score_away'),
+    detail: text('detail'),
+    /** VAR-disallowed goals stay visible, struck through (PRD section 11). */
+    isCancelled: boolean('is_cancelled').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('match_events_provider_key').on(t.provider, t.providerEventId),
+    index('match_events_match_idx').on(t.matchId, t.minute),
+    check(
+      'match_events_type_valid',
+      sql`type = ANY (ARRAY['GOAL','OWN_GOAL','PENALTY_GOAL','MISSED_PENALTY','YELLOW_CARD','SECOND_YELLOW','RED_CARD','SUBSTITUTION','VAR'])`
+    ),
+    check('match_events_minute_range', sql`minute IS NULL OR (minute BETWEEN 0 AND 150)`),
+    check('match_events_added_time_range', sql`added_time IS NULL OR (added_time BETWEEN 0 AND 30)`),
+  ]
+)
+
 export type CompetitionRow = typeof competitions.$inferSelect
 export type TeamRow = typeof teams.$inferSelect
 export type MatchRow = typeof matches.$inferSelect
@@ -572,3 +642,4 @@ export type FollowRow = typeof follows.$inferSelect
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect
 export type MatchSignalRow = typeof matchSignals.$inferSelect
 export type NotificationLogRow = typeof notificationLog.$inferSelect
+export type MatchEventRow = typeof matchEvents.$inferSelect
