@@ -12,6 +12,13 @@
   NODE_VERSION = "20"
   # Keep Netlify's build log focused on real problems.
   NEXT_TELEMETRY_DISABLED = "1"
+  # Netlify's secret scanner fails the build when any environment variable's
+  # value appears in the output. These are public by design: NEXT_PUBLIC_*
+  # values are inlined into the browser bundle on purpose (the VAPID public
+  # key is what the browser subscribes with), and the site URL is printed in
+  # every sitemap and canonical link. Only genuinely public keys belong here -
+  # never a credential.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_VAPID_PUBLIC_KEY,VAPID_PUBLIC_KEY,NEXT_PUBLIC_SITE_URL,URL"
 
 # Keeps the database warm without anyone having to visit the site.
 #
